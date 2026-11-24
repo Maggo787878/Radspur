@@ -9,12 +9,15 @@
 <body class="login">
 <form method="post" action="/login" class="card">
   <h1>Radspur</h1>
-  <p id="err" class="error" hidden>Falsches Passwort.</p>
+  <p id="err" class="error" hidden>Benutzername oder Passwort falsch.</p>
   <p id="err-locked" class="error" hidden>Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.</p>
-  <p id="err-cookie" class="error" hidden>Passwort korrekt, aber der Browser hat das Anmelde-Cookie nicht gespeichert.
+  <p id="err-cookie" class="error" hidden>Anmeldung korrekt, aber der Browser hat das Anmelde-Cookie nicht gespeichert.
     Seite über <b>https://</b> aufrufen oder Cookies für diese Seite erlauben.</p>
+  <label>Benutzername
+    <input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+  </label>
   <label>Passwort
-    <input type="password" name="password" autocomplete="current-password" required autofocus>
+    <input type="password" name="password" autocomplete="current-password" required>
   </label>
   <button type="submit">Anmelden</button>
 </form>

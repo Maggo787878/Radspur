@@ -2,6 +2,7 @@
 
 **Radspur by mwonline.at** – selbst gehostetes Tour-Tracking für Rad und Laufen plus „Handy finden“.
 Android-App und ein kleiner Server als Docker-Container, ohne Cloud-Dienste Dritter.
+Mehrere Benutzer, Registrierung nur per Einladung durch den Administrator.
 
 **App herunterladen:** [neueste Version unter Releases](https://github.com/Maggo787878/Radspur/releases/latest)
 
@@ -47,13 +48,27 @@ deploy/    docker-compose.yml, .env.example, nginx-Vorlage
 - Nach einem Befehl meldet sich das Handy 15 min lang jede Minute („Suchmodus“)
 - Touren mit Sportart ansehen, GPX herunterladen, löschen
 - Positionsverlauf wird nach `LOCATION_RETENTION_DAYS` gelöscht (Touren bleiben)
+- **Konto**: Passwort ändern, angemeldete Handys ansehen und entfernen
+
+### Benutzer
+
+- Jeder Benutzer sieht und steuert nur **sein eigenes Handy und seine eigenen Touren**.
+- Registrierung **nur per Einladung**: Der Admin erstellt im Reiter *Benutzer* einen Link
+  (7 Tage gültig, einmal verwendbar) und schickt ihn selbst per Mail oder Messenger. Die eingeladene
+  Person wählt Benutzername und Passwort.
+- Der Admin verwaltet Konten – **sperren** (wirkt sofort für Browser und Handy), **Passwort-Link**
+  erzeugen, **löschen** (mit allen Daten) – sieht aber bewusst **keine** Positionen oder Touren anderer.
+- In der App meldet man sich mit Benutzername und Passwort an; der Server vergibt pro Handy ein
+  eigenes Token. Das Passwort wird am Handy nicht gespeichert.
 
 ### Sicherheit
 
-- Login mit Passwort, signiertes Session-Cookie (`HttpOnly`, `SameSite`, `Secure` bei HTTPS)
-- **Schutz gegen Passwort-Raten**: Sperre nach 5 Fehlversuchen pro IP für 15 min, zusätzlich global
-  höchstens ~1 Fehlversuch pro Sekunde
-- Geräte-API nur mit `DEVICE_TOKEN` (Bearer), Vergleich in konstanter Zeit
+- Passwörter mit bcrypt; Sitzungen, Geräte-Tokens und Einladungslinks werden nur als SHA-256-Hash gespeichert
+- Sitzungen serverseitig: Abmelden, Sperren und Passwortänderung wirken sofort
+- Session-Cookie `HttpOnly`, `SameSite`, `Secure` bei HTTPS
+- **Schutz gegen Passwort-Raten**: Sperre nach 5 Fehlversuchen für 15 min – pro IP **und** pro
+  Benutzername –, zusätzlich global höchstens ~1 Fehlversuch pro Sekunde
+- Strikte Datentrennung zwischen Benutzern, abgesichert durch automatische Tests
 - Content-Security-Policy, HSTS (bei HTTPS), `X-Frame-Options`, `nosniff`, Permissions-Policy
 - Alle Skripte vom eigenen Server (Leaflet eingebettet), keine fremden CDNs
 - CSRF-Schutz für alle ändernden Web-Anfragen
@@ -68,10 +83,10 @@ git clone https://github.com/Maggo787878/Radspur.git && cd Radspur/deploy
 ```
 
 ```bash
-cp .env.example .env && openssl rand -hex 32
+cp .env.example .env && nano .env
 ```
 
-In `.env` mindestens `ADMIN_PASSWORD` und `DEVICE_TOKEN` (den eben erzeugten Wert) setzen, dann:
+In `.env` mindestens `ADMIN_PASSWORD` und `PUBLIC_URL` setzen, dann:
 
 ```bash
 docker compose pull && docker compose up -d
@@ -87,8 +102,10 @@ git pull && docker compose pull && docker compose up -d
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `ADMIN_PASSWORD` | – | Passwort der Weboberfläche (mind. 8 Zeichen) |
-| `DEVICE_TOKEN` | – | Token, das in der App eingetragen wird (mind. 16 Zeichen) |
+| `ADMIN_USER` | `admin` | Name des Admin-Kontos – nur beim **ersten Start** verwendet |
+| `ADMIN_PASSWORD` | – | Passwort des Admin-Kontos (mind. 8 Zeichen) – nur beim **ersten Start** verwendet, danach in der Weboberfläche ändern |
+| `PUBLIC_URL` | aus der Anfrage | öffentliche Adresse, Basis für Einladungslinks (z. B. `https://radspur.example.at`) |
+| `DEVICE_TOKEN` | leer | optional: gemeinsames Geräte-Token aus Versionen vor der Benutzerverwaltung, gehört dem Admin |
 | `LOCATION_RETENTION_DAYS` | `30` | Aufbewahrung des Positionsverlaufs |
 | `RADSPUR_BIND` | `127.0.0.1` | Adresse, auf der Port 8080 veröffentlicht wird (`0.0.0.0` = aus dem Netz erreichbar) |
 | `RADSPUR_PORT` | `8080` | veröffentlichter Port |
@@ -119,6 +136,25 @@ Reines HTTP funktioniert, Passwort, Token und Positionen gehen dann aber im Klar
 das ist nur im LAN oder über VPN vertretbar. Ist `RADSPUR_BIND=0.0.0.0` gesetzt, Port 8080 in der
 Firewall von außen sperren.
 
+### Umstieg von der Einzelbenutzer-Version
+
+Beim ersten Start der neuen Version legt der Server das Admin-Konto aus `ADMIN_USER` (Standard
+`admin`) und dem bisherigen `ADMIN_PASSWORD` an und ordnet ihm **alle vorhandenen Touren und
+Positionen** zu. Ein Handy mit dem alten `DEVICE_TOKEN` funktioniert weiter. Danach:
+
+1. Im Browser mit Benutzername `admin` und dem bisherigen Passwort anmelden.
+2. In der App unter *Einstellungen* abmelden und mit Benutzername und Passwort neu anmelden.
+3. Wenn alle Handys umgestellt sind, `DEVICE_TOKEN` in `.env` leeren und den Container neu starten.
+
+### Admin-Passwort vergessen
+
+Ein Link zum Setzen eines neuen Passworts (7 Tage gültig) lässt sich direkt am Server erzeugen –
+das entsperrt das Konto auch:
+
+```bash
+docker exec radspur radspur-server reset-link admin
+```
+
 ### Daten und Backup
 
 Die Daten liegen im Docker-Volume `deploy_radspur-data` (SQLite). Backup:
@@ -144,8 +180,9 @@ für amd64 und arm64. Das Paket ist öffentlich, `docker compose pull` braucht k
 
 ### Einrichtung
 
-1. **Einstellungen**: Server-URL (`https://…`) und `DEVICE_TOKEN` eintragen → *Speichern & testen*.
+1. **Einstellungen**: Server-URL (`https://…`), Benutzername und Passwort eintragen → *Anmelden*.
    Kurz darauf erscheint „Letzte Meldung an Server“ und die Position in der Weboberfläche.
+   Ein Konto gibt es nur per Einladung vom Administrator.
 2. Berechtigungen erteilen: Standort, Benachrichtigungen, **Standort im Hintergrund („Immer zulassen“)**
    und **Akku-Optimierung deaktivieren** – sonst funktioniert „Handy finden“ nicht zuverlässig.
 3. Samsung, Xiaomi, Huawei & Co.: Radspur zusätzlich in der Energiespar-/Autostart-Verwaltung des
@@ -183,30 +220,33 @@ Secrets lassen sich nicht mehr auslesen, und ohne Schlüssel sind keine Updates 
 - Android führt Hintergrundjobs frühestens alle 15 min aus, im Stromsparmodus auch seltener. Ein Befehl
   aus dem Web („Klingeln“, „Position“) wirkt daher erst beim nächsten Check-in. Danach reagiert das
   Handy 15 min lang minütlich. Mögliche Ausbaustufe: Push über einen selbst gehosteten **ntfy**-Server.
-- Ein Benutzer, ein Gerät.
+- Pro Benutzer wird ein Handy geortet – bei mehreren angemeldeten Handys zeigt die Weboberfläche die
+  zuletzt gemeldete Position und Befehle gehen an das Handy, das sich als nächstes meldet.
+- Die Statistik in der App rechnet mit den Touren auf dem Handy; auf ein neues Handy werden Touren
+  (noch) nicht vom Server zurückgeholt.
 - Ausgeschaltetes Handy oder Handy ohne Netz kann nicht gefunden werden – die zuletzt gemeldete
   Position bleibt sichtbar.
-- Abmelden löscht das Session-Cookie im Browser; serverseitig wird eine Sitzung erst durch Ablauf
-  (30 Tage) oder eine Änderung von `ADMIN_PASSWORD` ungültig.
 
 ## API
 
 | Methode | Pfad | Auth | Zweck |
 |---|---|---|---|
-| POST | `/api/device/locations` | Bearer `DEVICE_TOKEN` | Positionen melden; Antwort enthält offene Befehle |
+| POST | `/api/device/login` | – | Anmeldung `{username, password, device}` → `{token}` (Geräte-Token) |
+| POST | `/api/device/locations` | Bearer Geräte-Token | Positionen melden; Antwort enthält offene Befehle |
 | POST | `/api/device/commands/{id}/ack` | Bearer | Befehl bestätigen |
 | POST | `/api/device/tours` | Bearer | Tour hochladen (Upsert per `clientId`, `type`: `bike` \| `run`) |
 | GET | `/healthz` | – | Healthcheck |
 
 Die Web-API (`/api/web/*`) verlangt ein Session-Cookie nach Login und den Header `X-Radspur: 1`
-für ändernde Anfragen.
+für ändernde Anfragen; `/api/web/admin/*` zusätzlich die Rolle Admin. Einladungen:
+`GET/POST /api/invite/{token}`, Seite `/einladung/{token}`.
 
 ## Entwicklung
 
 Server lokal starten:
 
 ```bash
-cd server && ADMIN_PASSWORD=testtest DEVICE_TOKEN=0123456789abcdef DB_PATH=./dev.db go run .
+cd server && ADMIN_PASSWORD=testtest DB_PATH=./dev.db go run .
 ```
 
 App bauen:
@@ -215,7 +255,14 @@ App bauen:
 cd android && ./gradlew assembleDebug
 ```
 
-Tests: Unit-Tests (Statistik, Excel-Export) und Screenshot-Tests der Bildschirme mit
+Server-Tests (u. a. Datentrennung zwischen Benutzern, Einladungen, Sperren, Login-Sperre, Übernahme
+einer alten Datenbank):
+
+```bash
+cd server && go test ./...
+```
+
+App: Unit-Tests (Statistik, Excel-Export) und Screenshot-Tests der Bildschirme mit
 [Paparazzi](https://github.com/cashapp/paparazzi) – ohne Gerät oder Emulator, auf einem Pixel 5 und
 einem kleinen Gerät mit 130 % Schriftgröße. Referenzbilder liegen in `android/app/src/test/snapshots/`.
 

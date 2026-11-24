@@ -22,6 +22,35 @@ data class LocationReport(
 /** Minimal client for the Radspur server (HttpURLConnection + org.json, no extra deps). */
 class Api(private val prefs: Prefs) {
 
+    companion object {
+        /**
+         * Meldet das Handy mit Benutzername + Passwort an und liefert das Geräte-Token.
+         * Das Passwort wird nicht gespeichert.
+         */
+        suspend fun login(serverUrl: String, username: String, password: String, device: String): String =
+            withContext(Dispatchers.IO) {
+                val conn = URL(serverUrl.trimEnd('/') + "/api/device/login").openConnection() as HttpURLConnection
+                try {
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 15_000
+                    conn.readTimeout = 30_000
+                    conn.doOutput = true
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    val body = JSONObject().put("username", username).put("password", password).put("device", device)
+                    conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                    val code = conn.responseCode
+                    if (code != 200) {
+                        val msg = conn.errorStream?.bufferedReader()?.use { it.readText() }?.trim().orEmpty()
+                        throw IOException(msg.ifEmpty { "HTTP $code" })
+                    }
+                    JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).getString("token")
+                } finally {
+                    conn.disconnect()
+                }
+            }
+    }
+
+
     private suspend fun post(path: String, body: String): String = withContext(Dispatchers.IO) {
         if (!prefs.configured) throw IOException("Server nicht konfiguriert")
         val conn = URL(prefs.serverUrl + path).openConnection() as HttpURLConnection
@@ -35,7 +64,13 @@ class Api(private val prefs: Prefs) {
             conn.outputStream.use { it.write(body.toByteArray()) }
             val code = conn.responseCode
             if (code !in 200..299) {
-                throw IOException(if (code == 401) "Token abgelehnt (401)" else "HTTP $code")
+                throw IOException(
+                    when (code) {
+                        401 -> "Nicht angemeldet oder Konto gesperrt – bitte in den Einstellungen neu anmelden"
+                        409 -> "Tour-ID gehört einem anderen Benutzer"
+                        else -> "HTTP $code"
+                    }
+                )
             }
             if (code == 204) "" else conn.inputStream.bufferedReader().use { it.readText() }
         } finally {

@@ -32,7 +32,10 @@ let tourMap;
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
   document.querySelectorAll('.tab').forEach(t => t.hidden = t.id !== 'tab-' + b.dataset.tab);
-  if (b.dataset.tab === 'tours') { initTourMap(); loadTours(); }
+  const tab = b.dataset.tab;
+  if (tab === 'tours') { initTourMap(); loadTours(); }
+  else if (tab === 'account') loadAccount();
+  else if (tab === 'users') loadUsers();
   else phoneMap.invalidateSize();
 }));
 
@@ -126,3 +129,101 @@ async function showTour(id) {
   tourLine = L.polyline(t.points.map(p => [p.lat, p.lon]), { color: '#c62828', weight: 4 }).addTo(tourMap);
   tourMap.fitBounds(tourLine.getBounds(), { padding: [20, 20] });
 }
+
+// ---------- Konto ----------
+let me = null;
+api('/api/web/me').then(u => {
+  me = u;
+  document.getElementById('whoami').textContent = u.username + (u.role === 'admin' ? ' (Admin)' : '');
+  document.getElementById('nav-users').hidden = u.role !== 'admin';
+});
+
+const fmtDate = ts => ts ? new Date(ts).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' }) : '–';
+
+async function loadAccount() {
+  const devs = await api('/api/web/me/devices');
+  const el = document.getElementById('device-list');
+  if (!devs.length) { el.innerHTML = '<p class="muted">Noch kein Handy angemeldet.</p>'; return; }
+  el.innerHTML = `<table class="list"><tr><th>Handy</th><th class="hide-sm">angemeldet</th><th>zuletzt aktiv</th><th></th></tr>` +
+    devs.map(d => `<tr><td>${esc(d.name)}</td><td class="hide-sm">${fmtDate(d.created)}</td><td>${fmtDate(d.lastSeen)}</td>
+      <td class="actions-cell"><button data-dev="${d.id}">Entfernen</button></td></tr>`).join('') + '</table>';
+  el.querySelectorAll('[data-dev]').forEach(btn => btn.onclick = async () => {
+    if (!confirm('Dieses Handy abmelden? Es muss sich danach neu anmelden.')) return;
+    await api('/api/web/me/devices/' + btn.dataset.dev, { method: 'DELETE' }).catch(e => alert(e.message));
+    loadAccount();
+  });
+}
+
+document.getElementById('pw-form').onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, msg = document.getElementById('pw-msg');
+  if (f.new.value !== f.new2.value) { msg.className = 'error'; msg.textContent = 'Die neuen Passwörter stimmen nicht überein.'; return; }
+  try {
+    await api('/api/web/me/password', { method: 'POST', body: JSON.stringify({ current: f.current.value, new: f.new.value }) });
+    f.reset(); msg.className = 'ok'; msg.textContent = 'Passwort geändert. Andere Browser wurden abgemeldet.';
+  } catch (err) { msg.className = 'error'; msg.textContent = err.message.trim(); }
+};
+
+// ---------- Benutzer (Admin) ----------
+async function loadUsers() {
+  const [users, invites] = await Promise.all([api('/api/web/admin/users'), api('/api/web/admin/invites')]);
+
+  const il = document.getElementById('invite-list');
+  il.innerHTML = invites.length ? `<table class="list"><tr><th>Offener Link</th><th>gültig bis</th><th></th></tr>` +
+    invites.map(i => `<tr><td>${i.purpose === 'reset' ? 'Neues Passwort: ' + esc(i.target) : 'Einladung'}${i.note && i.purpose !== 'reset' ? ' – ' + esc(i.note) : ''}</td>
+      <td>${fmtDate(i.expires)}</td><td class="actions-cell"><button data-inv="${i.id}">Widerrufen</button></td></tr>`).join('') + '</table>' : '';
+  il.querySelectorAll('[data-inv]').forEach(btn => btn.onclick = async () => {
+    await api('/api/web/admin/invites/' + btn.dataset.inv, { method: 'DELETE' }); loadUsers();
+  });
+
+  const ul = document.getElementById('user-list');
+  ul.innerHTML = `<table class="list"><tr><th>Benutzer</th><th class="hide-sm">seit</th><th>zuletzt aktiv</th><th class="hide-sm">Handys</th><th></th></tr>` +
+    users.map(u => {
+      const self = me && u.id === me.id;
+      return `<tr><td>${esc(u.username)} ${u.role === 'admin' ? '<span class="tag">Admin</span>' : ''} ${u.disabled ? '<span class="tag off">gesperrt</span>' : ''}</td>
+      <td class="hide-sm">${fmtDate(u.created)}</td><td>${fmtDate(u.lastActive)}</td><td class="hide-sm">${u.devices}</td>
+      <td class="actions-cell">${self ? '<span class="muted">du</span>' : `
+        <button data-act="reset" data-id="${u.id}" data-name="${esc(u.username)}">Passwort-Link</button>
+        <button data-act="${u.disabled ? 'enable' : 'disable'}" data-id="${u.id}" data-name="${esc(u.username)}">${u.disabled ? 'Entsperren' : 'Sperren'}</button>
+        <button data-act="delete" data-id="${u.id}" data-name="${esc(u.username)}" class="danger">Löschen</button>`}</td></tr>`;
+    }).join('') + '</table>';
+  ul.querySelectorAll('[data-act]').forEach(btn => btn.onclick = () => userAction(btn.dataset.act, btn.dataset.id, btn.dataset.name));
+}
+
+async function userAction(act, id, name) {
+  try {
+    if (act === 'delete') {
+      if (prompt(`Benutzer „${name}“ mit ALLEN Positionen und Touren endgültig löschen?\nZur Bestätigung den Benutzernamen eingeben:`) !== name) return;
+      await api('/api/web/admin/users/' + id, { method: 'DELETE' });
+    } else if (act === 'disable') {
+      if (!confirm(`„${name}“ sperren? Anmeldung und Handy funktionieren dann sofort nicht mehr.`)) return;
+      await api(`/api/web/admin/users/${id}/disable`, { method: 'POST' });
+    } else if (act === 'enable') {
+      await api(`/api/web/admin/users/${id}/enable`, { method: 'POST' });
+    } else if (act === 'reset') {
+      const r = await api(`/api/web/admin/users/${id}/reset`, { method: 'POST' });
+      showLink(r.url);
+    }
+  } catch (e) { alert(e.message); }
+  loadUsers();
+}
+
+function showLink(url) {
+  document.getElementById('invite-result').hidden = false;
+  const inp = document.getElementById('invite-url');
+  inp.value = url; inp.select();
+}
+
+document.getElementById('invite-form').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const r = await api('/api/web/admin/invites', { method: 'POST', body: JSON.stringify({ note: e.target.note.value }) });
+    e.target.reset(); showLink(r.url); loadUsers();
+  } catch (err) { alert(err.message); }
+};
+document.getElementById('invite-copy').onclick = async () => {
+  const inp = document.getElementById('invite-url');
+  try { await navigator.clipboard.writeText(inp.value); } catch { inp.select(); document.execCommand('copy'); }
+  document.getElementById('invite-copy').textContent = 'Kopiert ✓';
+  setTimeout(() => document.getElementById('invite-copy').textContent = 'Kopieren', 2000);
+};

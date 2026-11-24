@@ -9,6 +9,11 @@ class Prefs(context: Context) {
         get() = sp.getString("server_url", "") ?: ""
         set(v) = sp.edit().putString("server_url", v.trim().trimEnd('/')).apply()
 
+    /** Benutzername, mit dem sich das Handy angemeldet hat (leer = altes gemeinsames Token). */
+    var username: String
+        get() = sp.getString("username", "") ?: ""
+        set(v) = sp.edit().putString("username", v).apply()
+
     var deviceToken: String
         get() = sp.getString("device_token", "") ?: ""
         set(v) = sp.edit().putString("device_token", v.trim()).apply()
@@ -36,7 +41,10 @@ class Prefs(context: Context) {
         get() = sp.getString("last_error", "") ?: ""
         set(v) = sp.edit().putString("last_error", v).apply()
 
-    val configured get() = serverUrl.startsWith("https://") || serverUrl.startsWith("http://")
+    val urlValid get() = serverUrl.startsWith("https://") || serverUrl.startsWith("http://")
+
+    /** Server-URL gesetzt und am Server angemeldet. */
+    val configured get() = urlValid && deviceToken.isNotEmpty()
 }
 
 val Context.app get() = applicationContext as RadspurApp

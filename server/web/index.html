@@ -13,7 +13,10 @@
   <nav>
     <button data-tab="phone" class="active">Handy</button>
     <button data-tab="tours">Touren</button>
+    <button data-tab="account">Konto</button>
+    <button data-tab="users" id="nav-users" hidden>Benutzer</button>
   </nav>
+  <span id="whoami" class="muted"></span>
   <form method="post" action="/logout"><button class="link">Abmelden</button></form>
 </header>
 
@@ -46,6 +49,41 @@
     <div class="right">
       <div id="tour-detail" class="muted">Tour auswählen.</div>
       <div id="map-tour" class="map"></div>
+    </div>
+  </section>
+
+  <section id="tab-account" class="tab page" hidden>
+    <div class="col">
+      <h2>Passwort ändern</h2>
+      <form id="pw-form" class="stack">
+        <label>Aktuelles Passwort <input type="password" name="current" autocomplete="current-password" required></label>
+        <label>Neues Passwort (mind. 10 Zeichen) <input type="password" name="new" autocomplete="new-password" minlength="10" required></label>
+        <label>Neues Passwort wiederholen <input type="password" name="new2" autocomplete="new-password" minlength="10" required></label>
+        <button type="submit">Passwort ändern</button>
+        <p id="pw-msg" class="muted"></p>
+      </form>
+      <h2>Angemeldete Handys</h2>
+      <p class="muted">In der Radspur-App mit Benutzername und Passwort anmelden. Ein entferntes Handy muss sich neu anmelden.</p>
+      <div id="device-list"></div>
+    </div>
+  </section>
+
+  <section id="tab-users" class="tab page" hidden>
+    <div class="col wide">
+      <h2>Einladen</h2>
+      <p class="muted">Der Link ist 7 Tage gültig und nur einmal verwendbar. Schick ihn selbst per Mail oder Messenger.</p>
+      <form id="invite-form" class="row-form">
+        <input name="note" maxlength="100" placeholder="Notiz, z. B. für wen (optional)">
+        <button type="submit">Einladungslink erstellen</button>
+      </form>
+      <div id="invite-result" hidden class="linkbox">
+        <input id="invite-url" readonly>
+        <button id="invite-copy" type="button">Kopieren</button>
+      </div>
+      <div id="invite-list"></div>
+      <h2>Benutzer</h2>
+      <p class="muted">Als Admin verwaltest du Konten. Positionen und Touren anderer Benutzer sind für dich nicht sichtbar.</p>
+      <div id="user-list"></div>
     </div>
   </section>
 </main>

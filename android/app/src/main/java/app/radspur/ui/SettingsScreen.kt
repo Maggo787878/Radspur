@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.radspur.app
 import app.radspur.find.FindWorker
+import app.radspur.find.UploadWorker
+import app.radspur.net.Api
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 @SuppressLint("BatteryLife")
@@ -31,10 +34,15 @@ fun SettingsScreen() {
     val ctx = LocalContext.current
     val prefs = ctx.app.prefs
     var url by remember { mutableStateOf(prefs.serverUrl) }
-    var token by remember { mutableStateOf(prefs.deviceToken) }
+    var username by remember { mutableStateOf(prefs.username) }
+    var password by remember { mutableStateOf("") }
+    var loggedIn by remember { mutableStateOf(prefs.configured) }
+    var busy by remember { mutableStateOf(false) }
+    var loginError by remember { mutableStateOf<String?>(null) }
+    var confirmLogout by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var findEnabled by remember { mutableStateOf(prefs.findEnabled) }
     var autoUpload by remember { mutableStateOf(prefs.autoUpload) }
-    var saved by remember { mutableStateOf(false) }
     // Refreshed on resume and every few seconds (status of the last check-in).
     var tick by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) { tick++; onPauseOrDispose { } }
@@ -48,28 +56,66 @@ fun SettingsScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Server", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(
-            url, { url = it; saved = false }, label = { Text("Server-URL") },
-            placeholder = { Text("http://radspur.example.at") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            token, { token = it; saved = false }, label = { Text("Geräte-Token (DEVICE_TOKEN)") },
-            singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-        )
-        if (url.trim().startsWith("http://")) Text(
-            "Unverschlüsselt: Token und Positionen gehen im Klartext über das Netz. " +
-                "Nur im eigenen LAN/VPN verwenden.",
-            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button({
-                prefs.serverUrl = url; prefs.deviceToken = token; url = prefs.serverUrl
-                saved = true
-                FindWorker.schedule(ctx)
-                FindWorker.runNow(ctx)
-            }) { Text("Speichern & testen") }
-            if (saved) Text("gespeichert")
+        if (loggedIn) {
+            Text(
+                if (prefs.username.isNotEmpty()) "Angemeldet als ${prefs.username}" else "Angemeldet (gemeinsames Geräte-Token)",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(prefs.serverUrl, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton({ FindWorker.runNow(ctx) }) { Text("Jetzt melden") }
+                TextButton({ confirmLogout = true }) { Text("Abmelden") }
+            }
+        } else {
+            OutlinedTextField(
+                url, { url = it; loginError = null }, label = { Text("Server-URL") },
+                placeholder = { Text("https://radspur.example.at") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                username, { username = it; loginError = null }, label = { Text("Benutzername") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                password, { password = it; loginError = null }, label = { Text("Passwort") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(),
+            )
+            if (url.trim().startsWith("http://")) Text(
+                "Unverschlüsselt: Passwort und Positionen gehen im Klartext über das Netz. " +
+                    "Nur im eigenen LAN/VPN verwenden.",
+                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
+            )
+            loginError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Button(
+                onClick = {
+                    val u = url.trim().trimEnd('/')
+                    if (!u.startsWith("http://") && !u.startsWith("https://")) {
+                        loginError = "Server-URL muss mit https:// oder http:// beginnen"; return@Button
+                    }
+                    busy = true
+                    scope.launch {
+                        try {
+                            val tok = Api.login(u, username.trim(), password, Build.MANUFACTURER + " " + Build.MODEL)
+                            prefs.serverUrl = u; prefs.username = username.trim(); prefs.deviceToken = tok
+                            prefs.lastError = ""
+                            password = ""; loggedIn = true
+                            FindWorker.schedule(ctx); FindWorker.runNow(ctx)
+                            if (prefs.autoUpload) UploadWorker.enqueue(ctx)
+                        } catch (e: Exception) {
+                            loginError = "Anmeldung fehlgeschlagen: " + (e.message ?: e.javaClass.simpleName)
+                        } finally {
+                            busy = false
+                        }
+                    }
+                },
+                enabled = !busy && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
+            ) { Text(if (busy) "Anmelden …" else "Anmelden") }
+            Text(
+                "Noch kein Konto? Konten werden nur per Einladung vom Administrator angelegt.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         key(tick) {
             val last = prefs.lastCheckIn
@@ -113,6 +159,21 @@ fun SettingsScreen() {
             }) { Text("App-Einstellungen öffnen") }
         }
     }
+
+    if (confirmLogout) AlertDialog(
+        onDismissRequest = { confirmLogout = false },
+        title = { Text("Abmelden?") },
+        text = { Text("Das Handy meldet dann keine Positionen mehr und lädt keine Touren hoch. Aufzeichnungen am Handy bleiben erhalten.") },
+        confirmButton = {
+            TextButton({
+                confirmLogout = false
+                prefs.deviceToken = ""; prefs.username = ""; prefs.lastCheckIn = 0; prefs.lastError = ""
+                loggedIn = false
+                FindWorker.schedule(ctx)
+            }) { Text("Abmelden") }
+        },
+        dismissButton = { TextButton({ confirmLogout = false }) { Text("Abbrechen") } },
+    )
 }
 
 @Composable

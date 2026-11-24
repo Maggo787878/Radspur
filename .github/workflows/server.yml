@@ -20,9 +20,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
-      - name: Vet & build
+      - name: Vet, Tests & Build
         working-directory: server
-        run: go vet ./... && go build ./...
+        run: go vet ./... && go test ./... && go build ./...
 
       - name: Image name
         id: img
