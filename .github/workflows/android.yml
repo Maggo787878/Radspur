@@ -46,6 +46,20 @@ jobs:
           ./gradlew --no-daemon assembleRelease
           mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/radspur.apk
 
+      # Fingerabdruck des Signaturzertifikats prüfen: nur der eigene Schlüssel
+      # erlaubt Updates über die installierte App.
+      - name: Signatur prüfen
+        env:
+          EXPECTED_CERT_SHA256: 427be7619b46b4b5ec4278f6ffab237fae597adaf1127dc287fd727790905e32
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          CERT=$("$BT/apksigner" verify --print-certs app/build/outputs/apk/release/radspur.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          echo "Zertifikat SHA-256: $CERT"
+          if [ -n "$RADSPUR_KEYSTORE" ] && [ "$CERT" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK ist nicht mit dem Radspur-Schlüssel signiert (erwartet $EXPECTED_CERT_SHA256)"
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: radspur-apk
