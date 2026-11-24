@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radspur – Anmelden</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login">
+<form method="post" action="/login" class="card">
+  <h1>Radspur</h1>
+  <p id="err" class="error" hidden>Falsches Passwort.</p>
+  <label>Passwort
+    <input type="password" name="password" autocomplete="current-password" required autofocus>
+  </label>
+  <button type="submit">Anmelden</button>
+</form>
+<script>if (location.search.includes('err=1')) document.getElementById('err').hidden = false;</script>
+</body>
+</html>

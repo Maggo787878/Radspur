@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radspur</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <strong>Radspur</strong>
+  <nav>
+    <button data-tab="phone" class="active">Handy</button>
+    <button data-tab="tours">Touren</button>
+  </nav>
+  <form method="post" action="/logout"><button class="link">Abmelden</button></form>
+</header>
+
+<main>
+  <section id="tab-phone" class="tab">
+    <div class="panel">
+      <div id="phone-info">Noch keine Position empfangen.</div>
+      <div class="actions">
+        <button id="btn-locate">Position anfordern</button>
+        <button id="btn-ring" class="danger">Klingeln lassen</button>
+        <button id="btn-stop">Klingeln stoppen</button>
+      </div>
+      <label class="inline">Verlauf
+        <select id="history">
+          <option value="0">aus</option>
+          <option value="6">6 Stunden</option>
+          <option value="24" selected>24 Stunden</option>
+          <option value="168">7 Tage</option>
+        </select>
+      </label>
+      <div id="pending" class="muted"></div>
+    </div>
+    <div id="map-phone" class="map"></div>
+  </section>
+
+  <section id="tab-tours" class="tab" hidden>
+    <div class="panel">
+      <div id="tour-list"></div>
+    </div>
+    <div class="right">
+      <div id="tour-detail" class="muted">Tour auswählen.</div>
+      <div id="map-tour" class="map"></div>
+    </div>
+  </section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

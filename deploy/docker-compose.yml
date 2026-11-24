@@ -1,0 +1,40 @@
+# Radspur-Server
+#   cp .env.example .env   # Werte anpassen
+#   docker compose pull && docker compose up -d
+# Mit eingebautem HTTPS (Caddy + Let's Encrypt):
+#   docker compose --profile caddy up -d
+
+services:
+  radspur:
+    image: ${RADSPUR_IMAGE:-ghcr.io/CHANGE-ME/radspur-server:latest}
+    container_name: radspur
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PATH: /data/radspur.db
+    volumes:
+      - radspur-data:/data
+    # Nur lokal veröffentlichen – davor gehört ein Reverse Proxy mit TLS
+    # (eigener nginx/Traefik oder das Caddy-Profil unten).
+    ports:
+      - "127.0.0.1:${RADSPUR_PORT:-8080}:8080"
+
+  caddy:
+    image: caddy:2
+    profiles: [caddy]
+    restart: unless-stopped
+    depends_on: [radspur]
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN in .env setzen}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  radspur-data:
+  caddy-data:
+  caddy-config:

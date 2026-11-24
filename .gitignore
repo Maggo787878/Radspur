@@ -1,0 +1,13 @@
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.jks
+*.keystore
+# Server
+server/*.db*
+# Deploy
+deploy/.env
+.idea/
+.DS_Store
