@@ -29,7 +29,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.RADSPUR_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/radspur.jks"
+            printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/radspur.jks"
             echo "RADSPUR_KEYSTORE=$RUNNER_TEMP/radspur.jks" >> "$GITHUB_ENV"
           else
             echo "::warning::Kein Keystore-Secret gesetzt – APK wird mit Debug-Schlüssel signiert (Updates nicht möglich)."

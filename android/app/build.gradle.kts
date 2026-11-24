@@ -9,6 +9,8 @@ plugins {
 // Release signing comes from environment variables (set as GitHub secrets in CI).
 // Without them the release build is signed with the debug key.
 val ksFile = System.getenv("RADSPUR_KEYSTORE")
+// Leerzeichen/Zeilenumbrüche, die beim Einfügen der Secrets mitkommen, ignorieren.
+fun secret(name: String) = System.getenv(name)?.trim()
 
 android {
     namespace = "app.radspur"
@@ -26,9 +28,9 @@ android {
         if (ksFile != null) {
             create("release") {
                 storeFile = file(ksFile)
-                storePassword = System.getenv("RADSPUR_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("RADSPUR_KEY_ALIAS")
-                keyPassword = System.getenv("RADSPUR_KEY_PASSWORD")
+                storePassword = secret("RADSPUR_KEYSTORE_PASSWORD")
+                keyAlias = secret("RADSPUR_KEY_ALIAS")
+                keyPassword = secret("RADSPUR_KEY_PASSWORD")
             }
         }
     }
