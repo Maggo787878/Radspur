@@ -6,7 +6,7 @@
 
 services:
   radspur:
-    image: ${RADSPUR_IMAGE:-ghcr.io/CHANGE-ME/radspur-server:latest}
+    image: ${RADSPUR_IMAGE:-ghcr.io/maggo787878/radspur-server:latest}
     container_name: radspur
     restart: unless-stopped
     env_file: .env
