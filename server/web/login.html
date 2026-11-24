@@ -10,11 +10,17 @@
 <form method="post" action="/login" class="card">
   <h1>Radspur</h1>
   <p id="err" class="error" hidden>Falsches Passwort.</p>
+  <p id="err-cookie" class="error" hidden>Passwort korrekt, aber der Browser hat das Anmelde-Cookie nicht gespeichert.
+    Seite über <b>https://</b> aufrufen oder Cookies für diese Seite erlauben.</p>
   <label>Passwort
     <input type="password" name="password" autocomplete="current-password" required autofocus>
   </label>
   <button type="submit">Anmelden</button>
 </form>
-<script>if (location.search.includes('err=1')) document.getElementById('err').hidden = false;</script>
+<script>
+  const e = new URLSearchParams(location.search).get('err');
+  if (e === '1') document.getElementById('err').hidden = false;
+  if (e === 'cookie') document.getElementById('err-cookie').hidden = false;
+</script>
 </body>
 </html>

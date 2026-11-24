@@ -1,4 +1,5 @@
 'use strict';
+if (location.search) history.replaceState(null, '', location.pathname);
 
 const api = async (path, opts = {}) => {
   const res = await fetch(path, { ...opts, headers: { 'X-Radspur': '1', 'Content-Type': 'application/json', ...(opts.headers || {}) } });

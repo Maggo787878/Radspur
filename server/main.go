@@ -37,7 +37,8 @@ type config struct {
 	DeviceToken   string
 	SessionSecret []byte
 	RetentionDays int
-	SecureCookie  bool
+	// SecureCookie: "auto" (Secure flag only for HTTPS requests), "true" or "false".
+	SecureCookie string
 }
 
 type server struct {
@@ -58,7 +59,7 @@ func loadConfig() config {
 		DBPath:        env("DB_PATH", "/data/radspur.db"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
 		DeviceToken:   os.Getenv("DEVICE_TOKEN"),
-		SecureCookie:  env("SECURE_COOKIE", "true") == "true",
+		SecureCookie:  strings.ToLower(env("SECURE_COOKIE", "auto")),
 	}
 	c.RetentionDays, _ = strconv.Atoi(env("LOCATION_RETENTION_DAYS", "30"))
 	if len(c.AdminPassword) < 8 {
@@ -242,21 +243,49 @@ func (s *server) web(h http.HandlerFunc) http.Handler {
 func (s *server) webPage(h http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.validSession(r) {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			target := "/login"
+			if r.URL.Query().Get("login") == "1" {
+				log.Printf("Browser von %s hat das Session-Cookie nicht gespeichert (https=%v, SECURE_COOKIE=%s)",
+					r.RemoteAddr, isHTTPS(r), s.cfg.SecureCookie)
+				target = "/login?err=cookie"
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
 			return
 		}
 		h(w, r)
 	})
 }
 
+// isHTTPS reports whether the browser talks HTTPS to us, directly or via a
+// reverse proxy that sets X-Forwarded-Proto.
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]), "https")
+}
+
+func (s *server) secureCookie(r *http.Request) bool {
+	switch s.cfg.SecureCookie {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return isHTTPS(r)
+	}
+}
+
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	pw := r.FormValue("password")
 	if subtle.ConstantTimeCompare([]byte(pw), []byte(s.cfg.AdminPassword)) != 1 {
+		log.Printf("Login fehlgeschlagen von %s", r.RemoteAddr)
 		time.Sleep(time.Second)
 		http.Redirect(w, r, "/login?err=1", http.StatusSeeOther)
 		return
 	}
+	secure := s.secureCookie(r)
 	nonce := make([]byte, 8)
 	_, _ = rand.Read(nonce)
 	exp := time.Now().Add(30 * 24 * time.Hour)
@@ -266,14 +295,16 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  exp,
 		HttpOnly: true,
-		Secure:   s.cfg.SecureCookie,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	log.Printf("Login erfolgreich von %s (https=%v, secure-cookie=%v)", r.RemoteAddr, isHTTPS(r), secure)
+	// The marker lets the start page detect a browser that dropped the cookie.
+	http.Redirect(w, r, "/?login=1", http.StatusSeeOther)
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.secureCookie(r), SameSite: http.SameSiteLaxMode})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
