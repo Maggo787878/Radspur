@@ -175,7 +175,8 @@ func securityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "same-origin")
+		// OSM tile servers require a Referer (tile usage policy); send the origin only.
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.ServeHTTP(w, r)
 	})
 }

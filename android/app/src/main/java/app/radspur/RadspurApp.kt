@@ -14,7 +14,8 @@ class RadspurApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Configuration.getInstance().apply {
-            userAgentValue = "Radspur/${BuildConfig.VERSION_NAME}"
+            // OSM tile policy: identify the app with a contact URL.
+            userAgentValue = "Radspur/${BuildConfig.VERSION_NAME} (+https://github.com/Maggo787878/Radspur)"
             osmdroidBasePath = cacheDir.resolve("osmdroid")
             osmdroidTileCache = cacheDir.resolve("osmdroid/tiles")
         }

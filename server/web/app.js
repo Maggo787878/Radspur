@@ -20,7 +20,8 @@ const fmtDur = s => `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).p
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const tiles = () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19, attribution: '&copy; OpenStreetMap-Mitwirkende'
+  maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende',
+  referrerPolicy: 'strict-origin-when-cross-origin' // OSM-Kachelserver verlangen einen Referer
 });
 
 // ---------- tabs ----------
