@@ -5,7 +5,7 @@ Selbst gehostetes Handy-Finden und Tour-Tracking (Radtouren) – Android-App plu
 ```
 android/   Android-App (Kotlin, Jetpack Compose, OpenStreetMap)
 server/    Server (Go, SQLite, Weboberfläche mit Leaflet)
-deploy/    docker-compose.yml, .env.example, Caddyfile
+deploy/    docker-compose.yml, .env.example, nginx-Vorlage
 .github/   CI: baut das Server-Image (GHCR) und die APK
 ```
 
@@ -29,26 +29,41 @@ deploy/    docker-compose.yml, .env.example, Caddyfile
 
 ## Server betreiben
 
+Der Container spricht reines HTTP auf Port 8080 und ist für den Betrieb hinter **nginx** gedacht.
+
 ```bash
-mkdir radspur && cd radspur
-# docker-compose.yml, .env.example und Caddyfile aus deploy/ hierher kopieren
+git clone https://github.com/Maggo787878/Radspur.git && cd Radspur/deploy
 cp .env.example .env
 openssl rand -hex 32     # → DEVICE_TOKEN in .env
-nano .env                # RADSPUR_IMAGE, ADMIN_PASSWORD, DEVICE_TOKEN
+nano .env                # ADMIN_PASSWORD, DEVICE_TOKEN, ggf. RADSPUR_BIND
 docker compose pull
 docker compose up -d
 ```
 
-Der Container veröffentlicht nur `127.0.0.1:8080`. Davor gehört ein Reverse Proxy mit TLS:
+### nginx davor
 
-- **Eigener Proxy** (nginx, Traefik, NPM …): auf `http://127.0.0.1:8080` weiterleiten.
-- **Mitgeliefertes Caddy** (automatisches Let's-Encrypt-Zertifikat): `DOMAIN` in `.env` setzen, Ports 80/443 freigeben, dann
-  `docker compose --profile caddy up -d`
+| nginx läuft … | `.env` | Ziel im Proxy |
+|---|---|---|
+| auf demselben Host | `RADSPUR_BIND=127.0.0.1` | `http://127.0.0.1:8080` |
+| auf einem anderen Rechner | `RADSPUR_BIND=0.0.0.0` | `http://<docker-host>:8080` |
+| als Container (z. B. Nginx Proxy Manager) | `PROXY_NETWORK=<netz>` und `docker compose -f docker-compose.yml -f docker-compose.npm.yml up -d` | `http://radspur:8080` |
 
-Die App akzeptiert nur HTTPS. Die Daten liegen im Volume `radspur-data` (SQLite), Backup z. B.:
+Eine fertige Vorlage liegt in `deploy/nginx/radspur.conf`. Wichtig sind darin:
+
+- `client_max_body_size 32m;` – sonst lehnt nginx Tour-Uploads über 1 MB mit `413` ab.
+- `X-Forwarded-Proto $scheme` – so weiß der Server, ob der Browser HTTP oder HTTPS nutzt (Login-Cookie), und
+  `X-Real-IP` für die echte Client-IP im Log (`docker logs radspur`).
+
+Bei Nginx Proxy Manager: unter *Advanced* `client_max_body_size 32m;` eintragen.
+
+Reines HTTP funktioniert für Weboberfläche und App. Passwort, Geräte-Token und Positionen gehen dann aber
+im Klartext über das Netz – über das Internet daher besser HTTPS (z. B. certbot, Vorlage ebenfalls in der Datei)
+oder Zugriff nur über VPN.
+
+Die Daten liegen im Volume `radspur-data` (SQLite), Backup z. B.:
 
 ```bash
-docker run --rm -v radspur_radspur-data:/data -v "$PWD":/backup alpine tar czf /backup/radspur-data.tgz -C /data .
+docker run --rm -v deploy_radspur-data:/data -v "$PWD":/backup alpine tar czf /backup/radspur-data.tgz -C /data .
 ```
 
 Update: `docker compose pull && docker compose up -d`
@@ -82,7 +97,7 @@ Den Keystore sicher aufbewahren – ohne ihn sind keine Updates möglich.
 ### Einrichtung am Handy
 
 1. APK installieren („Unbekannte Apps installieren“ für Browser/Dateimanager erlauben).
-2. **Einstellungen**: Server-URL (`https://…`) und `DEVICE_TOKEN` eintragen → *Speichern & testen*.
+2. **Einstellungen**: Server-URL (`http://…` oder `https://…`) und `DEVICE_TOKEN` eintragen → *Speichern & testen*.
 3. Berechtigungen: Standort, Benachrichtigungen, **Standort im Hintergrund („Immer zulassen“)**, **Akku-Optimierung deaktivieren**.
 4. Herstellerspezifisch (Samsung, Xiaomi, Huawei …): App vom „Energiesparen/Autostart-Verwaltung“ ausnehmen, sonst stoppt das System die Hintergrundmeldungen.
 
@@ -91,6 +106,7 @@ Den Keystore sicher aufbewahren – ohne ihn sind keine Updates möglich.
 - Android plant periodische Hintergrundjobs frühestens alle 15 min, im Doze-Modus auch seltener. Ein Befehl aus dem Web wird daher erst beim nächsten Check-in ausgeführt (typisch bis 15 min, manchmal länger). Danach reagiert das Handy minütlich.
   Ausbaustufe: Push über einen selbst gehosteten **ntfy**-Server (UnifiedPush) für sofortige Reaktion.
 - Ein Benutzer, ein Gerät.
+- Die App erlaubt HTTP und HTTPS; bei `http://` zeigt sie in den Einstellungen eine Warnung.
 - Ausgeschaltetes Handy oder Handy ohne Netz kann nicht gefunden werden – die zuletzt gemeldete Position bleibt sichtbar.
 
 ## API

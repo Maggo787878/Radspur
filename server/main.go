@@ -246,7 +246,7 @@ func (s *server) webPage(h http.HandlerFunc) http.Handler {
 			target := "/login"
 			if r.URL.Query().Get("login") == "1" {
 				log.Printf("Browser von %s hat das Session-Cookie nicht gespeichert (https=%v, SECURE_COOKIE=%s)",
-					r.RemoteAddr, isHTTPS(r), s.cfg.SecureCookie)
+					clientIP(r), isHTTPS(r), s.cfg.SecureCookie)
 				target = "/login?err=cookie"
 			}
 			http.Redirect(w, r, target, http.StatusSeeOther)
@@ -265,6 +265,14 @@ func isHTTPS(r *http.Request) bool {
 	return strings.EqualFold(strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]), "https")
 }
 
+// clientIP prefers the address nginx passes in X-Real-IP (logging only).
+func clientIP(r *http.Request) string {
+	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
 func (s *server) secureCookie(r *http.Request) bool {
 	switch s.cfg.SecureCookie {
 	case "true":
@@ -280,7 +288,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	pw := r.FormValue("password")
 	if subtle.ConstantTimeCompare([]byte(pw), []byte(s.cfg.AdminPassword)) != 1 {
-		log.Printf("Login fehlgeschlagen von %s", r.RemoteAddr)
+		log.Printf("Login fehlgeschlagen von %s", clientIP(r))
 		time.Sleep(time.Second)
 		http.Redirect(w, r, "/login?err=1", http.StatusSeeOther)
 		return
@@ -298,7 +306,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
-	log.Printf("Login erfolgreich von %s (https=%v, secure-cookie=%v)", r.RemoteAddr, isHTTPS(r), secure)
+	log.Printf("Login erfolgreich von %s (https=%v, secure-cookie=%v)", clientIP(r), isHTTPS(r), secure)
 	// The marker lets the start page detect a browser that dropped the cookie.
 	http.Redirect(w, r, "/?login=1", http.StatusSeeOther)
 }

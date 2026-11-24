@@ -1,8 +1,6 @@
-# Radspur-Server
+# Radspur-Server (HTTP auf Port 8080, gedacht für den Betrieb hinter nginx)
 #   cp .env.example .env   # Werte anpassen
 #   docker compose pull && docker compose up -d
-# Mit eingebautem HTTPS (Caddy + Let's Encrypt):
-#   docker compose --profile caddy up -d
 
 services:
   radspur:
@@ -14,27 +12,10 @@ services:
       DB_PATH: /data/radspur.db
     volumes:
       - radspur-data:/data
-    # Nur lokal veröffentlichen – davor gehört ein Reverse Proxy mit TLS
-    # (eigener nginx/Traefik oder das Caddy-Profil unten).
+    # RADSPUR_BIND=127.0.0.1 → nur für nginx auf demselben Host erreichbar
+    # RADSPUR_BIND=0.0.0.0   → auch von anderen Rechnern (nginx auf anderem Host)
     ports:
-      - "127.0.0.1:${RADSPUR_PORT:-8080}:8080"
-
-  caddy:
-    image: caddy:2
-    profiles: [caddy]
-    restart: unless-stopped
-    depends_on: [radspur]
-    environment:
-      DOMAIN: ${DOMAIN:?DOMAIN in .env setzen}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - "${RADSPUR_BIND:-127.0.0.1}:${RADSPUR_PORT:-8080}:8080"
 
 volumes:
   radspur-data:
-  caddy-data:
-  caddy-config:

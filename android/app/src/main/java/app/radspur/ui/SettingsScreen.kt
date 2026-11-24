@@ -50,12 +50,17 @@ fun SettingsScreen() {
         Text("Server", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
             url, { url = it; saved = false }, label = { Text("Server-URL") },
-            placeholder = { Text("https://radspur.example.at") }, singleLine = true,
+            placeholder = { Text("http://radspur.example.at") }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             token, { token = it; saved = false }, label = { Text("Geräte-Token (DEVICE_TOKEN)") },
             singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+        )
+        if (url.trim().startsWith("http://")) Text(
+            "Unverschlüsselt: Token und Positionen gehen im Klartext über das Netz. " +
+                "Nur im eigenen LAN/VPN verwenden.",
+            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Button({

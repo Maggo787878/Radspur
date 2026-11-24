@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nur HTTPS. Für einen Test im LAN ohne TLS hier einen <domain-config cleartextTrafficPermitted="true"> ergänzen. -->
+<!-- HTTP und HTTPS erlaubt: der Server läuft hinter einem eigenen nginx,
+     der wahlweise nur HTTP anbietet. Bei http:// warnt die App in den Einstellungen. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>
