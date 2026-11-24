@@ -17,6 +17,9 @@ const ago = ts => {
   return `vor ${Math.round(s / 86400)} Tagen`;
 };
 const fmtDur = s => `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')} h`;
+const sportLabel = t => t.type === 'run' ? 'Laufen' : 'Rad';
+const isRun = t => t.type === 'run';
+const pace = (m, s) => { if (!m || !s) return '–'; const spk = Math.round(s / (m / 1000)); return `${Math.floor(spk / 60)}:${String(spk % 60).padStart(2, '0')} /km`; };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const tiles = () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -91,8 +94,8 @@ async function loadTours() {
   const list = document.getElementById('tour-list');
   if (!tours.length) { list.innerHTML = '<p class="muted">Noch keine Touren hochgeladen.</p>'; return; }
   list.innerHTML = tours.map(t => `<div class="tour" data-id="${t.id}">
-      <div>${esc(t.name)}</div>
-      <small>${fmtTime(t.startTs)} · ${(t.distanceM / 1000).toFixed(1)} km · ${fmtDur(t.movingS)}</small>
+      <div><span class="badge ${isRun(t) ? 'run' : 'bike'}">${sportLabel(t)}</span> ${esc(t.name)}</div>
+      <small>${fmtTime(t.startTs)} · ${(t.distanceM / 1000).toFixed(1)} km · ${fmtDur(t.movingS)}${isRun(t) ? ' · ' + pace(t.distanceM, t.movingS) : ''}</small>
     </div>`).join('');
   list.querySelectorAll('.tour').forEach(el => el.onclick = () => showTour(el.dataset.id));
 }
@@ -105,7 +108,8 @@ async function showTour(id) {
       <strong>${esc(t.name)}</strong>
       <span><b>${(t.distanceM / 1000).toFixed(2)}</b> km</span>
       <span><b>${fmtDur(t.movingS)}</b> in Bewegung</span>
-      <span>Ø <b>${avg.toFixed(1)}</b> km/h</span>
+      <span class="badge ${isRun(t) ? 'run' : 'bike'}">${sportLabel(t)}</span>
+      ${isRun(t) ? `<span>Ø <b>${pace(t.distanceM, t.movingS)}</b></span>` : `<span>Ø <b>${avg.toFixed(1)}</b> km/h</span>`}
       <span>max <b>${(t.maxSpeed * 3.6).toFixed(1)}</b> km/h</span>
       <span>↑ <b>${Math.round(t.elevGain)}</b> m</span>
       <a href="/tours/${t.id}/gpx">GPX</a>

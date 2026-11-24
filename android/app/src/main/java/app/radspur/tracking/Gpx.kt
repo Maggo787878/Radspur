@@ -17,7 +17,7 @@ object Gpx {
         file.bufferedWriter().use { w ->
             w.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
             w.write("<gpx version=\"1.1\" creator=\"Radspur\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
-            w.write("<trk><name>${esc(tour.name)}</name><type>cycling</type><trkseg>\n")
+            w.write("<trk><name>${esc(tour.name)}</name><type>${if (tour.sport == app.radspur.data.Sport.RUN) "running" else "cycling"}</type><trkseg>\n")
             points.forEach { p ->
                 w.write("<trkpt lat=\"%.7f\" lon=\"%.7f\">".format(Locale.US, p.lat, p.lon))
                 p.alt?.let { w.write("<ele>%.1f</ele>".format(Locale.US, it)) }

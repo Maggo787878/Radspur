@@ -8,7 +8,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsBike
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -44,7 +45,8 @@ private data class Dest(val route: String, val label: String, val icon: androidx
 
 private val dests = listOf(
     Dest("record", "Aufzeichnen", Icons.Filled.DirectionsBike),
-    Dest("tours", "Touren", Icons.Filled.List),
+    Dest("tours", "Touren", Icons.AutoMirrored.Filled.List),
+    Dest("stats", "Statistik", Icons.Filled.BarChart),
     Dest("settings", "Einstellungen", Icons.Filled.Settings),
 )
 
@@ -67,7 +69,7 @@ fun AppNav() {
                             }
                         },
                         icon = { Icon(d.icon, null) },
-                        label = { Text(d.label) },
+                        label = { Text(d.label, maxLines = 1) },
                     )
                 }
             }
@@ -79,6 +81,7 @@ fun AppNav() {
             composable("tour/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
                 TourDetailScreen(it.arguments!!.getLong("id"), onDeleted = { nav.popBackStack() })
             }
+            composable("stats") { StatsScreen() }
             composable("settings") { SettingsScreen() }
         }
     }

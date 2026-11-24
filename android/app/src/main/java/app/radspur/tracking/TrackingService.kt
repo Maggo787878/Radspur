@@ -16,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import app.radspur.R
 import app.radspur.RadspurApp
 import app.radspur.app
+import app.radspur.data.Sport
 import app.radspur.data.Tour
 import app.radspur.data.TrackPoint
 import app.radspur.find.UploadWorker
@@ -33,6 +34,7 @@ enum class TrackStatus { IDLE, RECORDING, PAUSED }
 
 data class LiveTrack(
     val status: TrackStatus = TrackStatus.IDLE,
+    val sport: Sport = Sport.BIKE,
     val tourId: Long = 0,
     val startTs: Long = 0,
     val distanceM: Double = 0.0,
@@ -71,12 +73,16 @@ class TrackingService : LifecycleService() {
             ACTION_PAUSE -> pause()
             ACTION_RESUME -> resume()
             ACTION_STOP -> lifecycleScope.launch { stop() }
-            else -> lifecycleScope.launch { startOrRestore() } // ACTION_START or restart after process death
+            // ACTION_START or restart after process death (intent == null → sport from the DB)
+            else -> {
+                val sport = Sport.of(intent?.getStringExtra(EXTRA_SPORT))
+                lifecycleScope.launch { startOrRestore(sport) }
+            }
         }
         return START_STICKY
     }
 
-    private suspend fun startOrRestore() = mutex.withLock {
+    private suspend fun startOrRestore(sport: Sport) = mutex.withLock {
         if (tour != null) return@withLock
         val dao = app.db.tours()
         val existing = dao.activeTour()
@@ -85,15 +91,17 @@ class TrackingService : LifecycleService() {
             existing
         } else {
             val now = System.currentTimeMillis()
-            val name = SimpleDateFormat("EEE, dd.MM.yyyy HH:mm", Locale.GERMAN).format(Date(now))
-            val newTour = Tour(clientId = UUID.randomUUID().toString(), name = name, startTs = now)
+            val prefix = if (sport == Sport.RUN) "Lauf" else "Radtour"
+            val name = prefix + " " + SimpleDateFormat("EEE dd.MM.yyyy HH:mm", Locale.GERMAN).format(Date(now))
+            val newTour = Tour(clientId = UUID.randomUUID().toString(), name = name, startTs = now, type = sport.id)
             calc = TourCalculator()
             newTour.copy(id = dao.insert(newTour))
         }
         tour = t
         val path = dao.points(t.id).map { it.lat to it.lon }
         _state.value = LiveTrack(
-            TrackStatus.RECORDING, t.id, t.startTs, calc.distanceM, calc.movingS, calc.maxSpeed, calc.elevGain, path = path
+            TrackStatus.RECORDING, t.sport, t.id, t.startTs, calc.distanceM, calc.movingS, calc.maxSpeed, calc.elevGain,
+            path = path,
         )
         requestUpdates()
     }
@@ -186,7 +194,7 @@ class TrackingService : LifecycleService() {
             if (s.status == TrackStatus.PAUSED) " · pausiert" else ""
         return NotificationCompat.Builder(this, RadspurApp.CH_TRACKING)
             .setSmallIcon(R.drawable.ic_stat)
-            .setContentTitle("Tour wird aufgezeichnet")
+            .setContentTitle(if (s.sport == Sport.RUN) "Lauf wird aufgezeichnet" else "Radtour wird aufgezeichnet")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -205,12 +213,14 @@ class TrackingService : LifecycleService() {
         const val ACTION_PAUSE = "pause"
         const val ACTION_RESUME = "resume"
         const val ACTION_STOP = "stop"
+        const val EXTRA_SPORT = "sport"
 
         private val _state = MutableStateFlow(LiveTrack())
         val state: StateFlow<LiveTrack> = _state
 
-        fun send(ctx: Context, action: String) {
+        fun send(ctx: Context, action: String, sport: Sport? = null) {
             val i = Intent(ctx, TrackingService::class.java).setAction(action)
+            sport?.let { i.putExtra(EXTRA_SPORT, it.id) }
             ContextCompat.startForegroundService(ctx, i)
         }
     }

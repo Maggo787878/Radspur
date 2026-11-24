@@ -118,6 +118,9 @@ func main() {
 	if _, err := db.Exec(schema); err != nil {
 		log.Fatal("schema: ", err)
 	}
+	if err := migrate(db); err != nil {
+		log.Fatal("migration: ", err)
+	}
 	s := &server{cfg: cfg, db: db, login: newLoginLimiter(5, 15*time.Minute)}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -579,7 +582,26 @@ type tour struct {
 	MovingS   int64       `json:"movingS"`
 	MaxSpeed  float64     `json:"maxSpeed"`
 	ElevGain  float64     `json:"elevGain"`
+	Type      string      `json:"type"`
 	Points    []tourPoint `json:"points,omitempty"`
+}
+
+// Sportarten, wie sie die App sendet.
+var sports = map[string]bool{"bike": true, "run": true}
+
+// migrate ergänzt Spalten, die ältere Datenbanken noch nicht haben.
+func migrate(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('tours') WHERE name='type'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := db.Exec(`ALTER TABLE tours ADD COLUMN type TEXT NOT NULL DEFAULT 'bike'`); err != nil {
+			return err
+		}
+		log.Print("Datenbank migriert: Spalte tours.type ergänzt")
+	}
+	return nil
 }
 
 func (s *server) postTour(w http.ResponseWriter, r *http.Request) {
@@ -592,15 +614,18 @@ func (s *server) postTour(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, errors.New("clientId und points erforderlich"), http.StatusBadRequest)
 		return
 	}
+	if !sports[t.Type] {
+		t.Type = "bike" // ältere App-Versionen senden keinen Typ
+	}
 	if t.Name == "" {
 		t.Name = time.UnixMilli(t.StartTS).Format("02.01.2006 15:04")
 	}
 	pts, _ := json.Marshal(t.Points)
-	_, err := s.db.Exec(`INSERT INTO tours(client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,points)
-		VALUES(?,?,?,?,?,?,?,?,?)
+	_, err := s.db.Exec(`INSERT INTO tours(client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,points,type)
+		VALUES(?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(client_id) DO UPDATE SET name=excluded.name,start_ts=excluded.start_ts,end_ts=excluded.end_ts,
-		distance_m=excluded.distance_m,moving_s=excluded.moving_s,max_speed=excluded.max_speed,elev_gain=excluded.elev_gain,points=excluded.points`,
-		t.ClientID, t.Name, t.StartTS, t.EndTS, t.DistanceM, t.MovingS, t.MaxSpeed, t.ElevGain, string(pts))
+		distance_m=excluded.distance_m,moving_s=excluded.moving_s,max_speed=excluded.max_speed,elev_gain=excluded.elev_gain,points=excluded.points,type=excluded.type`,
+		t.ClientID, t.Name, t.StartTS, t.EndTS, t.DistanceM, t.MovingS, t.MaxSpeed, t.ElevGain, string(pts), t.Type)
 	if err != nil {
 		httpErr(w, err, 500)
 		return
@@ -609,7 +634,7 @@ func (s *server) postTour(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) listTours(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain FROM tours ORDER BY start_ts DESC`)
+	rows, err := s.db.Query(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,type FROM tours ORDER BY start_ts DESC`)
 	if err != nil {
 		httpErr(w, err, 500)
 		return
@@ -618,7 +643,7 @@ func (s *server) listTours(w http.ResponseWriter, r *http.Request) {
 	out := []tour{}
 	for rows.Next() {
 		var t tour
-		if err := rows.Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain); err != nil {
+		if err := rows.Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &t.Type); err != nil {
 			httpErr(w, err, 500)
 			return
 		}
@@ -630,8 +655,8 @@ func (s *server) listTours(w http.ResponseWriter, r *http.Request) {
 func (s *server) loadTour(id string) (*tour, error) {
 	var t tour
 	var pts string
-	err := s.db.QueryRow(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,points FROM tours WHERE id=?`, id).
-		Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &pts)
+	err := s.db.QueryRow(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,type,points FROM tours WHERE id=?`, id).
+		Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &t.Type, &pts)
 	if err != nil {
 		return nil, err
 	}
@@ -680,7 +705,11 @@ func (s *server) tourGPX(w http.ResponseWriter, r *http.Request) {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<gpx version="1.1" creator="Radspur" xmlns="http://www.topografix.com/GPX/1/1">` + "\n")
-	fmt.Fprintf(&b, "<trk><name>%s</name><type>cycling</type><trkseg>\n", xmlEscape(t.Name))
+	gpxType := "cycling"
+	if t.Type == "run" {
+		gpxType = "running"
+	}
+	fmt.Fprintf(&b, "<trk><name>%s</name><type>%s</type><trkseg>\n", xmlEscape(t.Name), gpxType)
 	for _, p := range t.Points {
 		fmt.Fprintf(&b, `<trkpt lat="%.7f" lon="%.7f">`, p.Lat, p.Lon)
 		if p.Alt != nil {

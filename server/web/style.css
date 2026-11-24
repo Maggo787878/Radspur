@@ -33,6 +33,7 @@ dt { color: var(--muted); }
 dd { margin: 0; font-variant-numeric: tabular-nums; }
 .tour { padding: 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
 .tour.sel { border-color: var(--accent); }
+.badge { display: inline-block; font-size: .75em; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); vertical-align: 1px; }
 .tour small { color: var(--muted); }
 .stats { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; }
 .stats b { font-size: 1.2em; }

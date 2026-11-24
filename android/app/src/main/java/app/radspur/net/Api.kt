@@ -80,6 +80,7 @@ class Api(private val prefs: Prefs) {
         }
         val body = JSONObject().apply {
             put("clientId", t.clientId); put("name", t.name)
+            put("type", t.type)
             put("startTs", t.startTs); put("endTs", t.endTs)
             put("distanceM", t.distanceM); put("movingS", t.movingS)
             put("maxSpeed", t.maxSpeed); put("elevGain", t.elevGain)
