@@ -53,7 +53,9 @@ jobs:
           EXPECTED_CERT_SHA256: 427be7619b46b4b5ec4278f6ffab237fae597adaf1127dc287fd727790905e32
         run: |
           BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          CERT=$("$BT/apksigner" verify --print-certs app/build/outputs/apk/release/radspur.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          OUT=$("$BT/apksigner" verify --print-certs app/build/outputs/apk/release/radspur.apk)
+          echo "$OUT" | grep -i "certificate"
+          CERT=$(echo "$OUT" | grep -m1 -i "certificate SHA-256 digest:" | awk '{print $NF}')
           echo "Zertifikat SHA-256: $CERT"
           if [ -n "$RADSPUR_KEYSTORE" ] && [ "$CERT" != "$EXPECTED_CERT_SHA256" ]; then
             echo "::error::APK ist nicht mit dem Radspur-Schlüssel signiert (erwartet $EXPECTED_CERT_SHA256)"
