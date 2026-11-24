@@ -11,3 +11,4 @@ server/*.db*
 deploy/.env
 .idea/
 .DS_Store
+signatur-backup/

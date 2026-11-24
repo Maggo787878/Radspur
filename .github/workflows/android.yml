@@ -51,8 +51,10 @@ jobs:
           name: radspur-apk
           path: android/app/build/outputs/apk/release/radspur.apk
 
+      # Nur mit festem Schlüssel veröffentlichen – sonst ließe sich die APK
+      # nicht über eine installierte Version aktualisieren.
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.RADSPUR_KEYSTORE != ''
         uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/release/radspur.apk
