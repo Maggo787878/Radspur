@@ -42,8 +42,9 @@ type config struct {
 }
 
 type server struct {
-	cfg config
-	db  *sql.DB
+	cfg   config
+	db    *sql.DB
+	login *loginLimiter
 }
 
 func env(key, def string) string {
@@ -117,7 +118,7 @@ func main() {
 	if _, err := db.Exec(schema); err != nil {
 		log.Fatal("schema: ", err)
 	}
-	s := &server{cfg: cfg, db: db}
+	s := &server{cfg: cfg, db: db, login: newLoginLimiter(5, 15*time.Minute)}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -152,7 +153,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, static, "login.html")
 	})
-	mux.HandleFunc("POST /login", s.login)
+	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("POST /logout", s.logout)
 
 	// Web API (session cookie)
@@ -164,17 +165,40 @@ func (s *server) routes() http.Handler {
 	mux.Handle("DELETE /api/web/tours/{id}", s.web(s.deleteTour))
 	mux.Handle("GET /tours/{id}/gpx", s.web(s.tourGPX))
 
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
+	mux.Handle("GET /static/", noDirListing(http.StripPrefix("/static/", http.FileServerFS(static))))
 	mux.Handle("GET /{$}", s.webPage(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, static, "index.html")
 	}))
 	return securityHeaders(mux)
 }
 
+// Content-Security-Policy: only own scripts/styles; map tiles from OSM.
+const csp = "default-src 'self'; script-src 'self'; style-src 'self'; " +
+	"img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; " +
+	"frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+
+// noDirListing answers 404 for directory requests (e.g. /static/), which
+// http.FileServer would otherwise answer with a listing or index.html.
+func noDirListing(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
 func securityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", csp)
+		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		if isHTTPS(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		// OSM tile servers require a Referer (tile usage policy); send the origin only.
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.ServeHTTP(w, r)
@@ -285,15 +309,32 @@ func (s *server) secureCookie(r *http.Request) bool {
 	}
 }
 
-func (s *server) login(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if wait := s.login.retryAfter(ip); wait > 0 {
+		log.Printf("Login gesperrt für %s (noch %s)", ip, wait.Round(time.Second))
+		w.Header().Set("Retry-After", fmt.Sprint(int(wait.Seconds())+1))
+		http.Redirect(w, r, "/login?err=locked", http.StatusSeeOther)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	pw := r.FormValue("password")
-	if subtle.ConstantTimeCompare([]byte(pw), []byte(s.cfg.AdminPassword)) != 1 {
-		log.Printf("Login fehlgeschlagen von %s", clientIP(r))
+
+	// Serialize attempts; a failure holds the lock for a second (see loginLimiter).
+	s.login.serial.Lock()
+	ok := subtle.ConstantTimeCompare([]byte(pw), []byte(s.cfg.AdminPassword)) == 1
+	if !ok {
 		time.Sleep(time.Second)
+	}
+	s.login.serial.Unlock()
+
+	if !ok {
+		s.login.fail(ip)
+		log.Printf("Login fehlgeschlagen von %s", ip)
 		http.Redirect(w, r, "/login?err=1", http.StatusSeeOther)
 		return
 	}
+	s.login.success(ip)
 	secure := s.secureCookie(r)
 	nonce := make([]byte, 8)
 	_, _ = rand.Read(nonce)

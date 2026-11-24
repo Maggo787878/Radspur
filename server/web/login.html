@@ -10,6 +10,7 @@
 <form method="post" action="/login" class="card">
   <h1>Radspur</h1>
   <p id="err" class="error" hidden>Falsches Passwort.</p>
+  <p id="err-locked" class="error" hidden>Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.</p>
   <p id="err-cookie" class="error" hidden>Passwort korrekt, aber der Browser hat das Anmelde-Cookie nicht gespeichert.
     Seite über <b>https://</b> aufrufen oder Cookies für diese Seite erlauben.</p>
   <label>Passwort
@@ -17,10 +18,6 @@
   </label>
   <button type="submit">Anmelden</button>
 </form>
-<script>
-  const e = new URLSearchParams(location.search).get('err');
-  if (e === '1') document.getElementById('err').hidden = false;
-  if (e === 'cookie') document.getElementById('err-cookie').hidden = false;
-</script>
+<script src="/static/login.js"></script>
 </body>
 </html>
