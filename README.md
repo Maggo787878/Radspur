@@ -47,6 +47,9 @@ deploy/    docker-compose.yml, .env.example, nginx-Vorlage
 - **Position anfordern**: frischer GPS-Fix mit hoher Genauigkeit
 - Nach einem Befehl meldet sich das Handy 15 min lang jede Minute („Suchmodus“)
 - Touren mit Sportart ansehen, GPX herunterladen, löschen
+- **Statistik**: Woche, Monat, Jahr, gesamt; Diagramm der letzten 12 Wochen/Monate (Details beim
+  Überfahren), Durchschnitte, Rekorde, Filter nach Sportart, **Excel-Download** – berechnet aus den
+  hochgeladenen Touren, in der Zeitzone des Browsers
 - Positionsverlauf wird nach `LOCATION_RETENTION_DAYS` gelöscht (Touren bleiben)
 - **Konto**: Passwort ändern, angemeldete Handys ansehen und entfernen
 

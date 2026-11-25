@@ -34,6 +34,7 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   document.querySelectorAll('.tab').forEach(t => t.hidden = t.id !== 'tab-' + b.dataset.tab);
   const tab = b.dataset.tab;
   if (tab === 'tours') { initTourMap(); loadTours(); }
+  else if (tab === 'stats') loadStats();
   else if (tab === 'account') loadAccount();
   else if (tab === 'users') loadUsers();
   else phoneMap.invalidateSize();
@@ -227,3 +228,115 @@ document.getElementById('invite-copy').onclick = async () => {
   document.getElementById('invite-copy').textContent = 'Kopiert ✓';
   setTimeout(() => document.getElementById('invite-copy').textContent = 'Kopieren', 2000);
 };
+
+// ---------- Statistik ----------
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Vienna';
+let statsSport = '', statsUnit = 'weeks', statsData = null;
+const km1 = m => (m / 1000).toLocaleString('de-AT', { maximumFractionDigits: m >= 100000 ? 0 : 1 }) + ' km';
+const hm = s => s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')} h` : `${Math.floor(s / 60)} min`;
+const touren = n => n + (n === 1 ? ' Tour' : ' Touren');
+
+document.getElementById('stats-xlsx').href = '/api/web/stats.xlsx?tz=' + encodeURIComponent(tz);
+document.querySelectorAll('#stats-sport button').forEach(b => b.onclick = () => {
+  statsSport = b.dataset.sport;
+  document.querySelectorAll('#stats-sport button').forEach(x => x.classList.toggle('active', x === b));
+  loadStats();
+});
+document.querySelectorAll('#stats-unit button').forEach(b => b.onclick = () => {
+  statsUnit = b.dataset.unit;
+  document.querySelectorAll('#stats-unit button').forEach(x => x.classList.toggle('active', x === b));
+  renderChart();
+});
+
+async function loadStats() {
+  statsData = await api(`/api/web/stats?tz=${encodeURIComponent(tz)}&sport=${statsSport}`);
+  const d = statsData, run = statsSport === 'run';
+  document.getElementById('stats-tiles').innerHTML = [['Diese Woche', d.week], ['Dieser Monat', d.month], ['Dieses Jahr', d.year], ['Gesamt', d.total]]
+    .map(([l, t]) => `<div class="tile"><div class="t-label">${l}</div><div class="t-value">${km1(t.distanceM)}</div>
+      <div class="t-sub">${touren(t.count)} · ${hm(t.movingS)}</div></div>`).join('');
+  document.getElementById('stats-avg').innerHTML = d.total.count ? `
+    <dt>pro Woche</dt><dd>${km1(d.perWeekM)}</dd>
+    <dt>pro Tour</dt><dd>${km1(d.perTourM)}</dd>
+    <dt>${run ? 'Ø Tempo' : 'Ø Geschwindigkeit'}</dt><dd>${run ? pace(d.total.distanceM, d.total.movingS) : (d.avgSpeed * 3.6).toFixed(1).replace('.', ',') + ' km/h'}</dd>
+    <dt>Höhenmeter gesamt</dt><dd>${Math.round(d.total.elevGain).toLocaleString('de-AT')} m</dd>` : '<dd class="muted">Noch keine Touren.</dd>';
+  const r = d.records, recs = [];
+  if (r.longest) recs.push(['Längste', r.longest, km1(r.longest.distanceM)]);
+  if (r.fastest) recs.push(['Schnellste (Ø)', r.fastest, isRun(r.fastest) ? pace(r.fastest.distanceM, r.fastest.movingS)
+    : (r.fastest.distanceM / r.fastest.movingS * 3.6).toFixed(1).replace('.', ',') + ' km/h']);
+  if (r.mostClimb) recs.push(['Meiste Höhenmeter', r.mostClimb, Math.round(r.mostClimb.elevGain) + ' m']);
+  const rl = document.getElementById('stats-records');
+  rl.innerHTML = recs.length ? recs.map(([l, t, v]) => `<div class="rec"><div><div class="r-sub">${l}</div>
+      <a href="#" data-tour="${t.id}">${esc(t.name)}</a> <span class="badge ${isRun(t) ? 'run' : 'bike'}">${sportLabel(t)}</span></div>
+      <div class="r-val">${v}</div></div>`).join('') : '<p class="muted">Noch keine Touren.</p>';
+  rl.querySelectorAll('[data-tour]').forEach(a => a.onclick = async e => {
+    e.preventDefault();
+    document.querySelector('nav button[data-tab=tours]').click();
+    await loadTours(); showTour(a.dataset.tour);
+  });
+  renderChart();
+}
+
+/** Säulendiagramm, eine Reihe (km je Zeitraum); Tooltip beim Überfahren. */
+function renderChart() {
+  if (!statsData) return;
+  const periods = statsData[statsUnit];
+  document.getElementById('chart-title').textContent = statsUnit === 'weeks' ? 'Kilometer pro Woche' : 'Kilometer pro Monat';
+  const el = document.getElementById('chart'); el.textContent = '';
+  // In echter Pixelbreite zeichnen, damit die Schrift auch am Handy lesbar bleibt.
+  const W = Math.max(300, Math.round(el.clientWidth || 640)), H = W < 500 ? 200 : 220, L = 36, R = 8, T = 18, B = 34, n = periods.length;
+  const maxKm = Math.max(0, ...periods.map(p => p.totals.distanceM / 1000));
+  const step = maxKm <= 0 ? 10 : [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(s => maxKm / s <= 4) || 1000;
+  const top = Math.max(step, Math.ceil(maxKm / step) * step);
+  const x0 = i => L + i * (W - L - R) / n, bw = (W - L - R) / n;
+  const y = km => T + (H - T - B) * (1 - km / top);
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', (statsUnit === 'weeks' ? 'Kilometer pro Woche' : 'Kilometer pro Monat') + ', letzte 12');
+  const add = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text != null) e.textContent = text;
+    svg.appendChild(e); return e;
+  };
+  for (let v = 0; v <= top; v += step) {
+    add('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'grid' });
+    add('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, v);
+  }
+  const tip = document.createElement('div'); tip.className = 'chart-tip'; tip.hidden = true;
+  const maxIdx = periods.findIndex(p => p.totals.distanceM / 1000 === maxKm && maxKm > 0);
+  periods.forEach((p, i) => {
+    const kmv = p.totals.distanceM / 1000, gap = Math.max(2, bw * 0.28);
+    const bx = x0(i) + gap / 2, bwid = bw - gap, by = y(kmv), bh = (H - B) - by;
+    let bar = null;
+    if (kmv > 0) {
+      const r = Math.min(4, bwid / 2, bh);
+      // oben abgerundet, unten an der Grundlinie gerade
+      bar = add('path', { class: 'bar', d: `M${bx},${H - B} V${by + r} Q${bx},${by} ${bx + r},${by} H${bx + bwid - r} Q${bx + bwid},${by} ${bx + bwid},${by + r} V${H - B} Z` });
+    }
+    if (i === maxIdx) add('text', { x: bx + bwid / 2, y: by - 5, 'text-anchor': 'middle', class: 'val' }, Math.round(kmv));
+    if ((n - 1 - i) % 2 === 0) add('text', { x: bx + bwid / 2, y: H - B + 16, 'text-anchor': 'middle', class: 'axis' }, p.short);
+    const hit = add('rect', { x: x0(i), y: T, width: bw, height: H - T - B, class: 'hit' });
+    const show = () => {
+      if (bar) bar.classList.add('hover');
+      tip.textContent = `${p.label}: ${km1(p.totals.distanceM)} · ${touren(p.totals.count)}`;
+      const box = el.getBoundingClientRect(), s = box.width / W;
+      tip.style.left = Math.min(Math.max((bx + bwid / 2) * s, 70), box.width - 70) + 'px';
+      tip.style.top = Math.min(by, H - B - 10) * s + 'px';
+      tip.hidden = false;
+    };
+    const hide = () => { if (bar) bar.classList.remove('hover'); tip.hidden = true; };
+    hit.addEventListener('mouseenter', show); hit.addEventListener('mouseleave', hide);
+    hit.addEventListener('click', show);
+  });
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  if (statsUnit === 'weeks') add('text', { x: (L + W - R) / 2, y: H - 2, 'text-anchor': 'middle', class: 'axis' }, 'Kalenderwoche');
+  el.append(svg, tip);
+}
+
+let chartResize;
+window.addEventListener('resize', () => {
+  clearTimeout(chartResize);
+  chartResize = setTimeout(() => { if (!document.getElementById('tab-stats').hidden) renderChart(); }, 150);
+});

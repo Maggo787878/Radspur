@@ -179,6 +179,8 @@ func (s *server) routes() http.Handler {
 	mux.Handle("GET /api/web/tours/{id}", s.web(s.getTour))
 	mux.Handle("DELETE /api/web/tours/{id}", s.web(s.deleteTour))
 	mux.Handle("GET /tours/{id}/gpx", s.web(s.tourGPX))
+	mux.Handle("GET /api/web/stats", s.web(s.getStats))
+	mux.Handle("GET /api/web/stats.xlsx", s.web(s.statsXlsx))
 
 	// Benutzerverwaltung (nur Admin)
 	mux.Handle("GET /api/web/admin/users", s.admin(s.adminListUsers))

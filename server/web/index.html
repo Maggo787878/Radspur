@@ -17,6 +17,7 @@
   <nav>
     <button data-tab="phone" class="active">Handy</button>
     <button data-tab="tours">Touren</button>
+    <button data-tab="stats">Statistik</button>
     <button data-tab="account">Konto</button>
     <button data-tab="users" id="nav-users" hidden>Benutzer</button>
   </nav>
@@ -53,6 +54,41 @@
     <div class="right">
       <div id="tour-detail" class="muted">Tour auswählen.</div>
       <div id="map-tour" class="map"></div>
+    </div>
+  </section>
+
+  <section id="tab-stats" class="tab page" hidden>
+    <div class="col wide">
+      <div class="stats-head">
+        <div class="seg" id="stats-sport">
+          <button data-sport="" class="active">Alle</button>
+          <button data-sport="bike">Rad</button>
+          <button data-sport="run">Laufen</button>
+        </div>
+        <a id="stats-xlsx" class="button" download>Als Excel herunterladen</a>
+      </div>
+      <div class="tiles" id="stats-tiles"></div>
+      <div class="panel-card">
+        <div class="chart-head">
+          <h3 id="chart-title">Kilometer pro Woche</h3>
+          <div class="seg small" id="stats-unit">
+            <button data-unit="weeks" class="active">12 Wochen</button>
+            <button data-unit="months">12 Monate</button>
+          </div>
+        </div>
+        <div id="chart" class="chart"></div>
+      </div>
+      <div class="two-col">
+        <div class="panel-card">
+          <h3>Durchschnitt</h3>
+          <dl id="stats-avg"></dl>
+        </div>
+        <div class="panel-card">
+          <h3>Rekorde</h3>
+          <div id="stats-records"></div>
+        </div>
+      </div>
+      <p class="muted small-note">Grundlage sind die Touren, die deine Handys zum Server hochgeladen haben. Die Excel-Datei enthält immer alle Sportarten.</p>
     </div>
   </section>
 
