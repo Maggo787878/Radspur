@@ -9,6 +9,7 @@ Mehrere Benutzer, Registrierung nur per Einladung durch den Administrator.
 ```
 android/   Android-App (Kotlin, Jetpack Compose, OpenStreetMap)
 server/    Server (Go, SQLite, Weboberfläche mit Leaflet)
+brouter/   Container für die Routenberechnung (BRouter)
 deploy/    docker-compose.yml, .env.example, nginx-Vorlage
 .github/   CI: baut das Server-Image (GHCR) und die signierte APK
 ```
@@ -47,6 +48,10 @@ deploy/    docker-compose.yml, .env.example, nginx-Vorlage
 - **Position anfordern**: frischer GPS-Fix mit hoher Genauigkeit
 - Nach einem Befehl meldet sich das Handy 15 min lang jede Minute („Suchmodus“)
 - Touren mit Sportart ansehen, GPX herunterladen, löschen
+- **Routen planen**: Orte suchen oder auf die Karte klicken, Punkte verschieben, Zwischenpunkte auf
+  der Linie einfügen; Profile Trekking, Rennrad, Gravel, MTB, „Sicher“ und zu Fuß; Distanz, Anstieg,
+  Abstieg, geschätzte Zeit und Höhenprofil; Routen speichern und als **GPX für den Radcomputer**
+  herunterladen (Garmin, Wahoo, Sigma, Hammerhead …)
 - **Statistik**: Woche, Monat, Jahr, gesamt; Diagramm der letzten 12 Wochen/Monate (Details beim
   Überfahren), Durchschnitte, Rekorde, Filter nach Sportart, **Excel-Download** – berechnet aus den
   hochgeladenen Touren, in der Zeitzone des Browsers
@@ -114,6 +119,8 @@ git pull && docker compose pull && docker compose up -d
 | `RADSPUR_PORT` | `8080` | veröffentlichter Port |
 | `PROXY_NETWORK` | `npm_default` | Docker-Netz des Proxys (nur mit `docker-compose.npm.yml`) |
 | `SECURE_COOKIE` | `auto` | `auto` = Secure-Flag nur bei HTTPS, `true` = immer, `false` = nie |
+| `BROUTER_SEGMENTS` | `E5_N45 E10_N45 E15_N45` | Kartenkacheln für die Routenplanung (je 5 × 5 Grad), Standard Österreich mit Grenzgebieten – siehe unten |
+| `BROUTER_MEMORY` | `1g` | Arbeitsspeicher für BRouter |
 | `RADSPUR_IMAGE` | `ghcr.io/maggo787878/radspur-server:latest` | Container-Image |
 
 ### nginx davor
@@ -157,6 +164,26 @@ das entsperrt das Konto auch:
 ```bash
 docker exec radspur radspur-server reset-link admin
 ```
+
+### Routenplanung (BRouter)
+
+Die Routen berechnet ein eigener Container mit [BRouter](https://github.com/abrensch/brouter), der nur
+intern für den Radspur-Server erreichbar ist. Beim ersten Start lädt er die Kartendaten (OpenStreetMap,
+~150–250 MB je Kachel) von brouter.de ins Volume `brouter-segments` und frischt sie alle 30 Tage auf –
+der erste Start dauert daher einige Minuten (`docker logs -f radspur-brouter`).
+
+Andere Regionen: Kacheln in `BROUTER_SEGMENTS` ergänzen (Namen = linke untere Ecke, z. B. `E10_N50`
+für 10–15° Ost / 50–55° Nord; Übersicht unter https://brouter.de/brouter/segments4/), dann
+`docker compose up -d`. Liegt ein Punkt außerhalb, meldet die Planung das.
+
+Die Ortssuche nutzt den öffentlichen Dienst Nominatim von OpenStreetMap (höchstens eine Anfrage pro
+Sekunde, Ergebnisse werden zwischengespeichert). Ein eigener Nominatim-/Photon-Server lässt sich mit
+`GEOCODER_URL` eintragen.
+
+**GPX auf den Radcomputer:** Die Datei ist ein GPX-1.1-Track mit Höhen. Garmin: per USB nach
+`Garmin/NewFiles` kopieren oder über Garmin Connect *Strecken → Importieren*. Wahoo, Hammerhead, Sigma
+u. a.: Import über die jeweilige App. Sehr lange Routen werden auf höchstens 9000 Punkte vereinfacht
+(Abweichung ≤ 2 m), weil ältere Geräte längere Strecken abschneiden.
 
 ### Daten und Backup
 
@@ -283,4 +310,5 @@ cd android && ./gradlew recordPaparazziDebug
 
 Kartendaten © [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkende ·
 [Leaflet](https://leafletjs.com) (BSD-2-Clause, `server/web/vendor/leaflet/LICENSE`) ·
-[osmdroid](https://github.com/osmdroid/osmdroid) (Apache-2.0)
+[osmdroid](https://github.com/osmdroid/osmdroid) (Apache-2.0) ·
+[BRouter](https://github.com/abrensch/brouter) (MIT) · Ortssuche [Nominatim](https://nominatim.org)

@@ -16,6 +16,20 @@ services:
     # RADSPUR_BIND=0.0.0.0   → auch von anderen Rechnern (nginx auf anderem Host)
     ports:
       - "${RADSPUR_BIND:-127.0.0.1}:${RADSPUR_PORT:-8080}:8080"
+    depends_on: [brouter]
+
+  # Routenberechnung für die Routenplanung (nur intern erreichbar).
+  # Lädt beim ersten Start die Kartendaten (~200 MB je Kachel) ins Volume.
+  brouter:
+    image: ${BROUTER_IMAGE:-ghcr.io/maggo787878/radspur-brouter:latest}
+    container_name: radspur-brouter
+    restart: unless-stopped
+    environment:
+      BROUTER_SEGMENTS: ${BROUTER_SEGMENTS:-E5_N45 E10_N45 E15_N45}
+      BROUTER_MEMORY: ${BROUTER_MEMORY:-1g}
+    volumes:
+      - brouter-segments:/segments
 
 volumes:
   radspur-data:
+  brouter-segments:

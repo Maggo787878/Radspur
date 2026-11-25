@@ -35,6 +35,8 @@ type config struct {
 	AdminPassword string // nur beim ersten Start: Passwort des Admins
 	DeviceToken   string // optional: altes gemeinsames Geräte-Token (gehört dem Admin)
 	PublicURL     string // optional: Basis für Einladungslinks, z. B. https://radspur.example.at
+	BrouterURL    string // Routenberechnung (BRouter-Container)
+	GeocoderURL   string // Ortssuche (Nominatim-kompatibel)
 	RetentionDays int
 	// SecureCookie: "auto" (Secure-Flag nur bei HTTPS), "true" oder "false".
 	SecureCookie string
@@ -61,6 +63,8 @@ func loadConfig() config {
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
 		DeviceToken:   strings.TrimSpace(os.Getenv("DEVICE_TOKEN")),
 		PublicURL:     strings.TrimRight(env("PUBLIC_URL", ""), "/"),
+		BrouterURL:    strings.TrimRight(env("BROUTER_URL", "http://brouter:17777"), "/"),
+		GeocoderURL:   strings.TrimRight(env("GEOCODER_URL", "https://nominatim.openstreetmap.org"), "/"),
 		SecureCookie:  strings.ToLower(env("SECURE_COOKIE", "auto")),
 	}
 	c.RetentionDays, _ = strconv.Atoi(env("LOCATION_RETENTION_DAYS", "30"))
@@ -180,6 +184,15 @@ func (s *server) routes() http.Handler {
 	mux.Handle("DELETE /api/web/tours/{id}", s.web(s.deleteTour))
 	mux.Handle("GET /tours/{id}/gpx", s.web(s.tourGPX))
 	mux.Handle("GET /api/web/stats", s.web(s.getStats))
+	mux.Handle("GET /api/web/geocode", s.web(s.geocode))
+	mux.Handle("GET /api/web/route-profiles", s.web(s.listProfiles))
+	mux.Handle("POST /api/web/route-calc", s.web(s.routeCalc))
+	mux.Handle("GET /api/web/routes", s.web(s.listRoutes))
+	mux.Handle("POST /api/web/routes", s.web(s.saveRoute))
+	mux.Handle("GET /api/web/routes/{id}", s.web(s.getRoute))
+	mux.Handle("PUT /api/web/routes/{id}", s.web(s.saveRoute))
+	mux.Handle("DELETE /api/web/routes/{id}", s.web(s.deleteRoute))
+	mux.Handle("GET /routes/{id}/gpx", s.web(s.routeGPX))
 	mux.Handle("GET /api/web/stats.xlsx", s.web(s.statsXlsx))
 
 	// Benutzerverwaltung (nur Admin)

@@ -685,7 +685,7 @@ func (s *server) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	for _, q := range []string{
 		`DELETE FROM locations WHERE user_id=?`, `DELETE FROM commands WHERE user_id=?`,
-		`DELETE FROM tours WHERE user_id=?`, `DELETE FROM sessions WHERE user_id=?`,
+		`DELETE FROM tours WHERE user_id=?`, `DELETE FROM routes WHERE user_id=?`, `DELETE FROM sessions WHERE user_id=?`,
 		`DELETE FROM devices WHERE user_id=?`, `DELETE FROM invites WHERE target_user=?`,
 		`UPDATE invites SET created_by=NULL WHERE created_by=?`, `DELETE FROM users WHERE id=?`,
 	} {

@@ -17,6 +17,7 @@
   <nav>
     <button data-tab="phone" class="active">Handy</button>
     <button data-tab="tours">Touren</button>
+    <button data-tab="routes">Routen</button>
     <button data-tab="stats">Statistik</button>
     <button data-tab="account">Konto</button>
     <button data-tab="users" id="nav-users" hidden>Benutzer</button>
@@ -54,6 +55,39 @@
     <div class="right">
       <div id="tour-detail" class="muted">Tour auswählen.</div>
       <div id="map-tour" class="map"></div>
+    </div>
+  </section>
+
+  <section id="tab-routes" class="tab" hidden>
+    <div class="panel route-panel">
+      <form id="rt-search" class="row-form">
+        <input name="q" placeholder="Ort oder Adresse suchen" autocomplete="off">
+        <button type="submit">Suchen</button>
+      </form>
+      <div id="rt-results"></div>
+      <p class="muted hint">Auf die Karte klicken setzt Punkte. Punkte lassen sich ziehen, ein Klick auf einen Punkt entfernt ihn, ein Klick auf die Linie fügt einen Zwischenpunkt ein.</p>
+      <label class="inline">Profil <select id="rt-profile"></select></label>
+      <div class="rt-tools">
+        <button type="button" id="rt-undo">Letzten Punkt löschen</button>
+        <button type="button" id="rt-reverse">Richtung umkehren</button>
+        <button type="button" id="rt-loop">Zurück zum Start</button>
+        <button type="button" id="rt-new">Neu</button>
+      </div>
+      <p id="rt-status" class="muted"></p>
+      <dl id="rt-stats"></dl>
+      <div class="rt-save">
+        <input id="rt-name" maxlength="80" placeholder="Name der Route">
+        <div class="rt-tools">
+          <button type="button" id="rt-save" class="primary">Speichern</button>
+          <button type="button" id="rt-gpx">GPX für Radcomputer</button>
+        </div>
+      </div>
+      <h3 class="rt-h">Gespeicherte Routen</h3>
+      <div id="rt-list"></div>
+    </div>
+    <div class="right">
+      <div id="map-route" class="map"></div>
+      <div id="rt-elev" class="elev" hidden></div>
     </div>
   </section>
 

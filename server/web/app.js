@@ -34,6 +34,7 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   document.querySelectorAll('.tab').forEach(t => t.hidden = t.id !== 'tab-' + b.dataset.tab);
   const tab = b.dataset.tab;
   if (tab === 'tours') { initTourMap(); loadTours(); }
+  else if (tab === 'routes') initRoutes();
   else if (tab === 'stats') loadStats();
   else if (tab === 'account') loadAccount();
   else if (tab === 'users') loadUsers();
@@ -340,3 +341,230 @@ window.addEventListener('resize', () => {
   clearTimeout(chartResize);
   chartResize = setTimeout(() => { if (!document.getElementById('tab-stats').hidden) renderChart(); }, 150);
 });
+
+// ---------- Routen planen ----------
+const rt = { map: null, wps: [], labels: [], markers: [], line: null, result: null, id: null, dirty: false, ctrl: null, timer: null, hover: null };
+const $ = id => document.getElementById(id);
+
+function haversine(a, b) {
+  const R = 6371000, toRad = x => x * Math.PI / 180;
+  const dLat = toRad(b[0] - a[0]), dLon = toRad(b[1] - a[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+async function initRoutes() {
+  if (rt.map) { rt.map.invalidateSize(); loadRouteList(); return; }
+  rt.map = L.map('map-route').setView([47.6, 13.5], 8);
+  tiles().addTo(rt.map);
+  rt.map.on('click', e => { addWaypoint([e.latlng.lat, e.latlng.lng]); });
+  const profiles = await api('/api/web/route-profiles');
+  $('rt-profile').innerHTML = profiles.map(p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join('');
+  $('rt-profile').onchange = () => { rt.dirty = true; scheduleCalc(); };
+  $('rt-undo').onclick = () => { rt.wps.pop(); rt.labels.pop(); changed(); };
+  $('rt-reverse').onclick = () => { rt.wps.reverse(); rt.labels.reverse(); changed(); };
+  $('rt-loop').onclick = () => { if (rt.wps.length > 1) { rt.wps.push(rt.wps[0]); rt.labels.push(rt.labels[0]); changed(); } };
+  $('rt-new').onclick = () => { if (!rt.dirty || confirm('Ungespeicherte Änderungen verwerfen?')) newRoute(); };
+  $('rt-save').onclick = () => saveRoute().catch(e => rtStatus(e.message, true));
+  $('rt-gpx').onclick = async () => {
+    try { if (!rt.id || rt.dirty) await saveRoute(); location.href = `/routes/${rt.id}/gpx`; }
+    catch (e) { rtStatus(e.message, true); }
+  };
+  $('rt-name').oninput = () => { rt.dirty = true; rt.nameTouched = true; };
+  $('rt-search').onsubmit = async e => {
+    e.preventDefault();
+    const q = e.target.q.value.trim(); if (q.length < 2) return;
+    const box = $('rt-results'); box.innerHTML = '<p class="muted">Suche …</p>';
+    try {
+      const hits = await api('/api/web/geocode?q=' + encodeURIComponent(q));
+      box.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="hit-item" data-i="${i}">${esc(h.name)}</button>`).join('')
+        : '<p class="muted">Nichts gefunden.</p>';
+      box.querySelectorAll('.hit-item').forEach(b => b.onclick = () => {
+        const h = hits[+b.dataset.i];
+        addWaypoint([h.lat, h.lon], h.name.split(',')[0]);
+        rt.map.setView([h.lat, h.lon], Math.max(rt.map.getZoom(), 12));
+        box.innerHTML = ''; e.target.q.value = '';
+      });
+    } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+  };
+  window.addEventListener('resize', () => { if (!$('tab-routes').hidden) drawElevation(); });
+  newRoute();
+  loadRouteList();
+}
+
+function rtStatus(msg, err) { const el = $('rt-status'); el.textContent = msg || ''; el.className = err ? 'error' : 'muted'; }
+
+function newRoute() {
+  rt.wps = []; rt.labels = []; rt.id = null; rt.result = null; rt.dirty = false; rt.nameTouched = false;
+  $('rt-name').value = '';
+  document.querySelectorAll('.rt-item').forEach(x => x.classList.remove('sel'));
+  changed(false);
+}
+
+function addWaypoint(ll, label) { rt.wps.push(ll); rt.labels.push(label || ''); changed(); }
+
+function insertWaypoint(ll) {
+  // Zwischen die beiden Wegpunkte einfügen, deren Streckenabschnitt am nächsten liegt.
+  const t = rt.result ? rt.result.track : null;
+  if (!t || rt.wps.length < 2) return addWaypoint(ll);
+  const nearestIdx = p => { let bi = 0, bd = Infinity; t.forEach((q, i) => { const d = haversine(p, q); if (d < bd) { bd = d; bi = i; } }); return bi; };
+  const idx = nearestIdx(ll), wpIdx = rt.wps.map(nearestIdx);
+  let at = rt.wps.length - 1;
+  for (let i = 1; i < wpIdx.length; i++) if (idx <= wpIdx[i]) { at = i; break; }
+  rt.wps.splice(at, 0, ll); rt.labels.splice(at, 0, '');
+  changed();
+}
+
+function autoName() {
+  if (rt.nameTouched) return;
+  const named = rt.labels.filter(Boolean);
+  $('rt-name').value = named.length >= 2 ? `${named[0]} – ${named[named.length - 1]}` : named[0] || '';
+}
+
+function changed(dirty = true) {
+  if (dirty) rt.dirty = true;
+  drawMarkers(); autoName(); scheduleCalc();
+}
+
+function drawMarkers() {
+  rt.markers.forEach(m => m.remove()); rt.markers = [];
+  const n = rt.wps.length;
+  rt.wps.forEach((ll, i) => {
+    const cls = i === 0 ? 'start' : (i === n - 1 && n > 1 ? 'end' : '');
+    const icon = L.divIcon({ className: '', html: `<div class="wp-icon ${cls}">${i === 0 ? 'S' : (i === n - 1 ? 'Z' : i)}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+    const m = L.marker(ll, { icon, draggable: true, title: rt.labels[i] || `Punkt ${i + 1}` }).addTo(rt.map);
+    m.on('dragend', () => { const p = m.getLatLng(); rt.wps[i] = [p.lat, p.lng]; rt.labels[i] = ''; changed(); });
+    m.on('click', () => { rt.wps.splice(i, 1); rt.labels.splice(i, 1); changed(); });
+    rt.markers.push(m);
+  });
+}
+
+function scheduleCalc() {
+  clearTimeout(rt.timer);
+  rt.timer = setTimeout(calcRoute, 250);
+}
+
+async function calcRoute() {
+  if (rt.ctrl) rt.ctrl.abort();
+  if (rt.wps.length < 2) {
+    rt.result = null; drawRoute(); rtStatus(rt.wps.length ? 'Weiteren Punkt setzen …' : 'Start auf die Karte klicken oder suchen.'); return;
+  }
+  rt.ctrl = new AbortController();
+  rtStatus('Berechne Route …');
+  try {
+    rt.result = await api('/api/web/route-calc', {
+      method: 'POST', signal: rt.ctrl.signal,
+      body: JSON.stringify({ profile: $('rt-profile').value, waypoints: rt.wps }),
+    });
+    rtStatus(''); drawRoute();
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    rt.result = null; drawRoute(); rtStatus(e.message.trim(), true);
+  }
+}
+
+function drawRoute() {
+  if (rt.line) { rt.line.remove(); rt.line = null; }
+  const r = rt.result, st = $('rt-stats');
+  if (!r) { st.innerHTML = ''; $('rt-elev').hidden = true; return; }
+  rt.line = L.polyline(r.track.map(p => [p[0], p[1]]), { color: '#1f6feb', weight: 5, opacity: .85 }).addTo(rt.map);
+  rt.line.on('click', e => { L.DomEvent.stopPropagation(e); insertWaypoint([e.latlng.lat, e.latlng.lng]); });
+  // Route ganz zeigen, wenn sie aus dem sichtbaren Ausschnitt ragt
+  if (!rt.map.getBounds().contains(rt.line.getBounds())) rt.map.fitBounds(rt.line.getBounds(), { padding: [30, 30] });
+  rt.markers.forEach(m => m.bringToFront && m.bringToFront());
+  const h = Math.floor(r.timeS / 3600), m = Math.round(r.timeS / 60) % 60;
+  st.innerHTML = `<dt>Distanz</dt><dd>${(r.distanceM / 1000).toFixed(1).replace('.', ',')} km</dd>
+    <dt>Anstieg</dt><dd>↑ ${Math.round(r.ascendM)} m</dd><dt>Abstieg</dt><dd>↓ ${Math.round(r.descendM)} m</dd>
+    <dt>Zeit (geschätzt)</dt><dd>ca. ${h}:${String(m).padStart(2, '0')} h</dd>`;
+  $('rt-elev').hidden = false;
+  rt.map.invalidateSize();
+  drawElevation();
+}
+
+/** Höhenprofil: Fläche über der Distanz; Überfahren zeigt km/Höhe und markiert die Stelle auf der Karte. */
+function drawElevation() {
+  const el = $('rt-elev'), r = rt.result;
+  if (!r || el.hidden) return;
+  el.textContent = '';
+  const dist = [0];
+  for (let i = 1; i < r.track.length; i++) dist.push(dist[i - 1] + haversine(r.track[i - 1], r.track[i]));
+  const total = dist[dist.length - 1] || 1, eles = r.track.map(p => p[2]);
+  let lo = Math.min(...eles), hi = Math.max(...eles);
+  const step = [10, 20, 50, 100, 200, 250, 500, 1000].find(s => (hi - lo) / s <= 4) || 1000;
+  lo = Math.floor(lo / step) * step; hi = Math.max(lo + step, Math.ceil(hi / step) * step);
+  const W = Math.max(300, el.clientWidth - 16), H = 140, L0 = 44, R0 = 8, T0 = 8, B0 = 22;
+  const x = d => L0 + (W - L0 - R0) * d / total, y = e => T0 + (H - T0 - B0) * (1 - (e - lo) / (hi - lo));
+  const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `Höhenprofil von ${lo} bis ${hi} m`);
+  const add = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; svg.appendChild(e); return e; };
+  for (let v = lo; v <= hi; v += step) { add('line', { x1: L0, x2: W - R0, y1: y(v), y2: y(v), class: 'grid' }); add('text', { x: L0 - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, v + ' m'); }
+  const kmStep = [1, 2, 5, 10, 20, 25, 50, 100].find(s => total / 1000 / s <= 8) || 100;
+  for (let k = 0; k <= total / 1000; k += kmStep) add('text', { x: x(k * 1000), y: H - 6, 'text-anchor': 'middle', class: 'axis' }, k + ' km');
+  // Für die Linie höchstens ~1 Punkt pro Pixel
+  const every = Math.max(1, Math.floor(r.track.length / W));
+  let d = '';
+  for (let i = 0; i < r.track.length; i += every) d += (d ? 'L' : 'M') + x(dist[i]).toFixed(1) + ',' + y(eles[i]).toFixed(1);
+  d += 'L' + x(total).toFixed(1) + ',' + y(eles[eles.length - 1]).toFixed(1);
+  add('path', { d: d + `L${x(total)},${H - B0}L${L0},${H - B0}Z`, class: 'area' });
+  add('path', { d, class: 'line' });
+  const cursor = add('line', { y1: T0, y2: H - B0, class: 'cursor', visibility: 'hidden' });
+  const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true;
+  const hit = add('rect', { x: L0, y: T0, width: W - L0 - R0, height: H - T0 - B0, fill: 'transparent' });
+  const move = ev => {
+    const bx = svg.getBoundingClientRect(), px = ev.clientX - bx.left;
+    const target = Math.max(0, Math.min(total, (px - L0) / (W - L0 - R0) * total));
+    let i = dist.findIndex(v => v >= target); if (i < 0) i = dist.length - 1;
+    cursor.setAttribute('x1', x(dist[i])); cursor.setAttribute('x2', x(dist[i])); cursor.setAttribute('visibility', 'visible');
+    tip.textContent = `${(dist[i] / 1000).toFixed(1).replace('.', ',')} km · ${Math.round(eles[i])} m`;
+    tip.style.left = Math.min(Math.max(x(dist[i]) + 8, 60), W - 50) + 'px'; tip.hidden = false;
+    const ll = [r.track[i][0], r.track[i][1]];
+    if (!rt.hover) rt.hover = L.circleMarker(ll, { radius: 7, color: '#fff', weight: 2, fillColor: '#1f6feb', fillOpacity: 1 }).addTo(rt.map);
+    else rt.hover.setLatLng(ll);
+  };
+  const leave = () => { cursor.setAttribute('visibility', 'hidden'); tip.hidden = true; if (rt.hover) { rt.hover.remove(); rt.hover = null; } };
+  hit.addEventListener('mousemove', move); hit.addEventListener('mouseleave', leave);
+  hit.addEventListener('touchmove', e => { move(e.touches[0]); e.preventDefault(); }, { passive: false });
+  hit.addEventListener('touchend', leave);
+  el.append(svg, tip);
+}
+
+async function saveRoute() {
+  if (rt.wps.length < 2) throw new Error('Mindestens Start und Ziel setzen');
+  const body = JSON.stringify({ name: $('rt-name').value, profile: $('rt-profile').value, waypoints: rt.wps });
+  rtStatus('Speichere …');
+  const res = rt.id ? await api('/api/web/routes/' + rt.id, { method: 'PUT', body })
+                    : await api('/api/web/routes', { method: 'POST', body });
+  rt.id = res.id; rt.dirty = false;
+  rtStatus('Gespeichert.');
+  await loadRouteList();
+}
+
+async function loadRouteList() {
+  const list = await api('/api/web/routes'), el = $('rt-list');
+  if (!list.length) { el.innerHTML = '<p class="muted">Noch keine Routen gespeichert.</p>'; return; }
+  el.innerHTML = list.map(r => `<div class="rt-item${r.id === rt.id ? ' sel' : ''}" data-id="${r.id}">
+      <div class="rt-main"><div>${esc(r.name)}</div><small>${(r.distanceM / 1000).toFixed(1).replace('.', ',')} km · ↑ ${Math.round(r.ascendM)} m</small></div>
+      <a class="button" href="/routes/${r.id}/gpx" title="GPX herunterladen">GPX</a>
+      <button type="button" class="link" data-del="${r.id}" title="Löschen">✕</button></div>`).join('');
+  el.querySelectorAll('.rt-item').forEach(item => item.onclick = async e => {
+    if (e.target.closest('a')) return;
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      if (!confirm('Route löschen?')) return;
+      await api('/api/web/routes/' + del.dataset.del, { method: 'DELETE' });
+      if (rt.id === +del.dataset.del) newRoute();
+      return loadRouteList();
+    }
+    if (rt.dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
+    const r = await api('/api/web/routes/' + item.dataset.id);
+    clearTimeout(rt.timer); if (rt.ctrl) rt.ctrl.abort(); // ausstehende Berechnung verwerfen
+    rt.id = r.id; rt.wps = r.waypoints; rt.labels = r.waypoints.map(() => ''); rt.nameTouched = true;
+    $('rt-name').value = r.name; $('rt-profile').value = r.profile;
+    rt.result = { track: r.track, distanceM: r.distanceM, ascendM: r.ascendM, descendM: r.descendM, timeS: r.timeS };
+    rt.dirty = false;
+    drawMarkers(); drawRoute(); rtStatus('');
+    rt.map.fitBounds(L.latLngBounds(r.track.map(p => [p[0], p[1]])), { padding: [30, 30] });
+    el.querySelectorAll('.rt-item').forEach(x => x.classList.toggle('sel', x === item));
+  });
+}

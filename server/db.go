@@ -45,6 +45,17 @@ CREATE TABLE IF NOT EXISTS invites (
   expires INTEGER NOT NULL,
   used INTEGER
 );
+CREATE TABLE IF NOT EXISTS routes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  profile TEXT NOT NULL,
+  waypoints TEXT NOT NULL,       -- JSON [[lat,lon],...]
+  track TEXT NOT NULL,           -- JSON [[lat,lon,ele],...]
+  distance_m REAL NOT NULL, ascend_m REAL NOT NULL, descend_m REAL NOT NULL, time_s INTEGER NOT NULL,
+  created INTEGER NOT NULL, updated INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_routes_user ON routes(user_id, updated);
 CREATE TABLE IF NOT EXISTS locations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER,
