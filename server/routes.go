@@ -9,11 +9,14 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -90,7 +93,7 @@ func (s *server) calcRoute(ctx context.Context, wps [][2]float64, profile string
 	res, err := httpClient.Do(req)
 	if err != nil {
 		log.Print("BRouter: ", err)
-		return nil, routeError{"Routenberechnung nicht erreichbar – läuft der BRouter-Container?"}
+		return nil, routeError{brouterUnreachable(err)}
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(res.Body, 64<<20))
@@ -138,6 +141,20 @@ func (s *server) calcRoute(ctx context.Context, wps [][2]float64, profile string
 	}
 	r.DescendM = descend(r.Track)
 	return r, nil
+}
+
+// brouterUnreachable übersetzt Verbindungsfehler in einen Hinweis, was zu tun ist.
+func brouterUnreachable(err error) string {
+	var dnsErr *net.DNSError
+	switch {
+	case errors.As(err, &dnsErr):
+		return "Routenberechnung: BRouter-Container nicht gefunden – docker-compose.yml aktuell (git pull) und mit „docker compose up -d“ gestartet?"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "Routenberechnung startet noch – beim ersten Start lädt BRouter die Kartendaten (docker logs radspur-brouter)"
+	case errors.Is(err, context.DeadlineExceeded), os.IsTimeout(err):
+		return "Routenberechnung antwortet nicht rechtzeitig – Route kürzer planen oder später erneut versuchen"
+	}
+	return "Routenberechnung nicht erreichbar – läuft der BRouter-Container? (docker logs radspur-brouter)"
 }
 
 // descend: Abstieg mit derselben Glättung (5 m Hysterese) wie die App.

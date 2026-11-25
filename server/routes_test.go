@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"math"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -188,4 +188,21 @@ func TestGeocodeCached(t *testing.T) {
 	}
 	c, _ := newBrowser(t, ts).do("GET", "/api/web/geocode?q=Wien", nil)
 	expect(t, "Ortssuche ohne Anmeldung", c, 401)
+}
+
+func TestBrouterUnreachableMessages(t *testing.T) {
+	for _, c := range []struct{ url, want string }{
+		{"http://brouter-gibt-es-nicht.invalid:17777", "nicht gefunden"},
+		{"http://127.0.0.1:1", "startet noch"},
+	} {
+		cfg := testConfig(filepath.Join(t.TempDir(), "u.db"))
+		cfg.BrouterURL = c.url
+		_, ts := startServer(t, cfg)
+		b := newBrowser(t, ts)
+		b.login("admin", adminPW)
+		code, body := b.do("POST", "/api/web/route-calc", routeIn{Profile: "trekking", Waypoints: salzburgGmunden})
+		if code != 422 || !strings.Contains(body, c.want) {
+			t.Errorf("%s: %d %q", c.url, code, body)
+		}
+	}
 }
