@@ -113,6 +113,7 @@ func migrate(db *sql.DB) error {
 	add := []struct{ table, col, ddl string }{
 		{"tours", "type", `ALTER TABLE tours ADD COLUMN type TEXT NOT NULL DEFAULT 'bike'`},
 		{"tours", "user_id", `ALTER TABLE tours ADD COLUMN user_id INTEGER`},
+		{"tours", "source", `ALTER TABLE tours ADD COLUMN source TEXT NOT NULL DEFAULT 'app'`},
 		{"locations", "user_id", `ALTER TABLE locations ADD COLUMN user_id INTEGER`},
 		{"commands", "user_id", `ALTER TABLE commands ADD COLUMN user_id INTEGER`},
 	}

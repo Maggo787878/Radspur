@@ -99,11 +99,12 @@ async function loadTours() {
   const list = document.getElementById('tour-list');
   if (!tours.length) { list.innerHTML = '<p class="muted">Noch keine Touren hochgeladen.</p>'; return; }
   list.innerHTML = tours.map(t => `<div class="tour" data-id="${t.id}">
-      <div><span class="badge ${isRun(t) ? 'run' : 'bike'}">${sportLabel(t)}</span> ${esc(t.name)}</div>
+      <div><span class="badge ${isRun(t) ? 'run' : 'bike'}">${sportLabel(t)}</span> ${esc(t.name)} ${srcTag(t)}</div>
       <small>${fmtTime(t.startTs)} · ${(t.distanceM / 1000).toFixed(1)} km · ${fmtDur(t.movingS)}${isRun(t) ? ' · ' + pace(t.distanceM, t.movingS) : ''}</small>
     </div>`).join('');
   list.querySelectorAll('.tour').forEach(el => el.onclick = () => showTour(el.dataset.id));
 }
+const srcTag = t => t.source === 'gpx' ? '<span class="src">GPX</span>' : t.source === 'manual' ? '<span class="src">manuell</span>' : '';
 
 async function showTour(id) {
   document.querySelectorAll('.tour').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
@@ -115,11 +116,21 @@ async function showTour(id) {
       <span><b>${fmtDur(t.movingS)}</b> in Bewegung</span>
       <span class="badge ${isRun(t) ? 'run' : 'bike'}">${sportLabel(t)}</span>
       ${isRun(t) ? `<span>Ø <b>${pace(t.distanceM, t.movingS)}</b></span>` : `<span>Ø <b>${avg.toFixed(1)}</b> km/h</span>`}
-      <span>max <b>${(t.maxSpeed * 3.6).toFixed(1)}</b> km/h</span>
+      ${t.maxSpeed > 0 ? `<span>max <b>${(t.maxSpeed * 3.6).toFixed(1)}</b> km/h</span>` : ''}
       <span>↑ <b>${Math.round(t.elevGain)}</b> m</span>
-      <a href="/tours/${t.id}/gpx">GPX</a>
+      ${t.points && t.points.length ? `<a href="/tours/${t.id}/gpx">GPX</a>` : '<span class="muted">ohne Streckenverlauf</span>'}
+      <span class="tour-edit"><select id="tour-sport"><option value="bike">Rad</option><option value="run">Laufen</option></select>
+        <button id="ren-tour" class="link">Umbenennen</button></span>
       <button id="del-tour" class="link">Löschen</button>
     </div>`;
+  const patch = async (name, type) => {
+    try { await api('/api/web/tours/' + t.id, { method: 'PATCH', body: JSON.stringify({ name, type }) }); }
+    catch (e) { alert(e.message); }
+    await loadTours(); showTour(String(t.id));
+  };
+  document.getElementById('tour-sport').value = t.type === 'run' ? 'run' : 'bike';
+  document.getElementById('tour-sport').onchange = e => patch(t.name, e.target.value);
+  document.getElementById('ren-tour').onclick = () => { const n = prompt('Neuer Name:', t.name); if (n && n.trim()) patch(n.trim(), t.type); };
   document.getElementById('del-tour').onclick = async () => {
     if (!confirm('Tour wirklich löschen?')) return;
     await api('/api/web/tours/' + t.id, { method: 'DELETE' });
@@ -127,9 +138,11 @@ async function showTour(id) {
     document.getElementById('tour-detail').textContent = 'Tour auswählen.';
     loadTours();
   };
-  if (tourLine) tourLine.remove();
-  tourLine = L.polyline(t.points.map(p => [p.lat, p.lon]), { color: '#c62828', weight: 4 }).addTo(tourMap);
-  tourMap.fitBounds(tourLine.getBounds(), { padding: [20, 20] });
+  if (tourLine) { tourLine.remove(); tourLine = null; }
+  if (t.points && t.points.length > 1) {
+    tourLine = L.polyline(t.points.map(p => [p.lat, p.lon]), { color: '#c62828', weight: 4 }).addTo(tourMap);
+    tourMap.fitBounds(tourLine.getBounds(), { padding: [20, 20] });
+  }
 }
 
 // ---------- Konto ----------
@@ -568,3 +581,56 @@ async function loadRouteList() {
     el.querySelectorAll('.rt-item').forEach(x => x.classList.toggle('sel', x === item));
   });
 }
+
+// ---------- Touren nachtragen ----------
+(() => {
+  const box = document.getElementById('add-tour'), gpxForm = document.getElementById('gpx-form'), manForm = document.getElementById('manual-form');
+  document.getElementById('add-tour-btn').onclick = () => {
+    box.hidden = !box.hidden;
+    const now = new Date();
+    if (!manForm.date.value) manForm.date.value = now.toLocaleDateString('sv-SE'); // JJJJ-MM-TT, lokal
+    if (!manForm.time.value) manForm.time.value = `${String(now.getHours()).padStart(2, '0')}:00`;
+  };
+  document.querySelectorAll('#add-mode button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#add-mode button').forEach(x => x.classList.toggle('active', x === b));
+    gpxForm.hidden = b.dataset.mode !== 'gpx'; manForm.hidden = b.dataset.mode !== 'manual';
+  });
+
+  gpxForm.onsubmit = async e => {
+    e.preventDefault();
+    const out = document.getElementById('gpx-result'), btn = gpxForm.querySelector('button[type=submit]');
+    out.textContent = ''; btn.disabled = true;
+    let last = null;
+    for (const f of gpxForm.files.files) {
+      const line = document.createElement('div'); line.textContent = f.name + ' …'; out.appendChild(line);
+      try {
+        const r = await api(`/api/web/tours/import-gpx?sport=${gpxForm.sport.value}&tz=${encodeURIComponent(tz)}`,
+          { method: 'POST', body: await f.text(), headers: { 'Content-Type': 'application/gpx+xml' } });
+        line.className = r.existed ? 'dup' : 'ok';
+        line.textContent = `${f.name}: ${r.existed ? 'bereits vorhanden' : r.name + ', ' + (r.distanceM / 1000).toFixed(1).replace('.', ',') + ' km'}`;
+        last = r.id;
+      } catch (err) { line.className = 'error'; line.textContent = `${f.name}: ${err.message.trim()}`; }
+    }
+    btn.disabled = false; gpxForm.files.value = '';
+    await loadTours();
+    if (last) showTour(String(last));
+  };
+
+  manForm.onsubmit = async e => {
+    e.preventDefault();
+    const f = manForm, msg = document.getElementById('manual-msg');
+    const [h, m] = f.dur.value.split(':').map(Number);
+    const body = {
+      name: f.name.value, type: f.type.value,
+      startTs: new Date(`${f.date.value}T${f.time.value}`).getTime(),
+      distanceM: Math.round(parseFloat(f.km.value) * 1000), movingS: h * 3600 + m * 60,
+      elevGain: Number(f.elev.value || 0),
+    };
+    try {
+      const r = await api('/api/web/tours/manual', { method: 'POST', body: JSON.stringify(body) });
+      msg.className = 'ok'; msg.textContent = 'Gespeichert.';
+      f.name.value = ''; f.km.value = ''; f.dur.value = ''; f.elev.value = '0';
+      await loadTours(); showTour(String(r.id));
+    } catch (err) { msg.className = 'error'; msg.textContent = err.message.trim(); }
+  };
+})();

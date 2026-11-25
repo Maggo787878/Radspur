@@ -223,6 +223,7 @@ type tour struct {
 	MaxSpeed  float64     `json:"maxSpeed"`
 	ElevGain  float64     `json:"elevGain"`
 	Type      string      `json:"type"`
+	Source    string      `json:"source,omitempty"` // app | gpx | manual
 	Points    []tourPoint `json:"points,omitempty"`
 }
 
@@ -268,7 +269,7 @@ func (s *server) postTour(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) listTours(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,type
+	rows, err := s.db.Query(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,type,source
 		FROM tours WHERE user_id=? ORDER BY start_ts DESC`, currentUser(r).ID)
 	if err != nil {
 		httpErr(w, err, 500)
@@ -278,7 +279,7 @@ func (s *server) listTours(w http.ResponseWriter, r *http.Request) {
 	out := []tour{}
 	for rows.Next() {
 		var t tour
-		if err := rows.Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &t.Type); err != nil {
+		if err := rows.Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &t.Type, &t.Source); err != nil {
 			httpErr(w, err, 500)
 			return
 		}
@@ -290,9 +291,9 @@ func (s *server) listTours(w http.ResponseWriter, r *http.Request) {
 func (s *server) loadTour(r *http.Request) (*tour, error) {
 	var t tour
 	var pts string
-	err := s.db.QueryRow(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,type,points
+	err := s.db.QueryRow(`SELECT id,client_id,name,start_ts,end_ts,distance_m,moving_s,max_speed,elev_gain,type,source,points
 		FROM tours WHERE id=? AND user_id=?`, r.PathValue("id"), currentUser(r).ID).
-		Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &t.Type, &pts)
+		Scan(&t.ID, &t.ClientID, &t.Name, &t.StartTS, &t.EndTS, &t.DistanceM, &t.MovingS, &t.MaxSpeed, &t.ElevGain, &t.Type, &t.Source, &pts)
 	if err != nil {
 		return nil, err
 	}

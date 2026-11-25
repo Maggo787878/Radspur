@@ -47,7 +47,12 @@ deploy/    docker-compose.yml, .env.example, nginx-Vorlage
 - **Klingeln lassen**: volle Lautstärke über den Alarm-Kanal, auch im Lautlos-Modus, 2 min oder bis Stopp
 - **Position anfordern**: frischer GPS-Fix mit hoher Genauigkeit
 - Nach einem Befehl meldet sich das Handy 15 min lang jede Minute („Suchmodus“)
-- Touren mit Sportart ansehen, GPX herunterladen, löschen
+- Touren mit Sportart ansehen, GPX herunterladen, umbenennen, Sportart ändern, löschen
+- **Touren nachtragen**: GPX-Dateien hochladen (mehrere auf einmal, z. B. vom Radcomputer, aus Garmin
+  Connect oder Strava – Distanz, Zeit in Bewegung, Höhenmeter und Höchstgeschwindigkeit werden aus dem
+  Track berechnet, doppelte Uploads erkannt) oder ohne Aufzeichnung von Hand eintragen (Datum, km, Zeit,
+  Höhenmeter). Nachgetragene Touren zählen in der Statistik der Weboberfläche; die Statistik in der
+  App rechnet weiterhin mit den Touren auf dem Handy.
 - **Routen planen**: Orte suchen oder auf die Karte klicken, Punkte verschieben, Zwischenpunkte auf
   der Linie einfügen; Profile Trekking, Rennrad, Gravel, MTB, „Sicher“ und zu Fuß; Distanz, Anstieg,
   Abstieg, geschätzte Zeit und Höhenprofil; Routen speichern und als **GPX für den Radcomputer**

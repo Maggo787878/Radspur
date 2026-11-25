@@ -157,7 +157,10 @@ func (s *server) sessionUser(r *http.Request) *user {
 	return &u
 }
 
-func (s *server) web(h http.HandlerFunc) http.Handler {
+func (s *server) web(h http.HandlerFunc) http.Handler { return s.webLimit(h, 1<<20) }
+
+// webLimit: Sitzung + CSRF-Prüfung, Request-Body auf limit Bytes begrenzt.
+func (s *server) webLimit(h http.HandlerFunc, limit int64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u := s.sessionUser(r)
 		if u == nil {
@@ -169,7 +172,7 @@ func (s *server) web(h http.HandlerFunc) http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		h(w, withUser(r, u))
 	})
 }

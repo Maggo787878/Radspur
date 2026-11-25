@@ -55,6 +55,23 @@ table.list td.actions-cell { text-align: right; white-space: nowrap; }
 table.list td.actions-cell button { margin-left: 4px; padding: 4px 8px; font-size: .9em; }
 .tag { font-size: .75em; padding: 1px 6px; border-radius: 4px; background: var(--line); }
 .tag.off { background: var(--danger); color: #fff; }
+/* ---------- Touren nachtragen ---------- */
+.add-btn { width: 100%; margin-bottom: 10px; }
+.add-tour { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; display: grid; gap: 10px; }
+.add-tour .stack label { font-size: .9em; }
+.add-tour input, .add-tour select { width: 100%; }
+.row2, .row3 { display: grid; gap: 8px; }
+.row2 { grid-template-columns: 1fr 1fr; }
+.row3 { grid-template-columns: 1fr 1fr 1fr; }
+.import-result div { font-size: .85em; padding: 3px 0; }
+.import-result .ok::before { content: "✓ "; }
+.import-result .error::before { content: "✗ "; }
+.import-result .dup { color: var(--muted); }
+.import-result .dup::before { content: "= "; }
+.src { font-size: .7em; padding: 1px 5px; border-radius: 4px; border: 1px dashed var(--line); color: var(--muted); vertical-align: 1px; }
+.tour-edit { display: inline-flex; gap: 6px; align-items: center; }
+.tour-edit select { padding: 2px 6px; }
+
 /* ---------- Routen ---------- */
 .route-panel { display: flex; flex-direction: column; gap: 10px; }
 .route-panel .hint { font-size: .85em; margin: 0; }

@@ -50,6 +50,38 @@
 
   <section id="tab-tours" class="tab" hidden>
     <div class="panel">
+      <button type="button" id="add-tour-btn" class="add-btn">+ Tour nachtragen</button>
+      <div id="add-tour" class="add-tour" hidden>
+        <div class="seg small" id="add-mode">
+          <button type="button" data-mode="gpx" class="active">GPX-Datei</button>
+          <button type="button" data-mode="manual">Von Hand</button>
+        </div>
+        <form id="gpx-form" class="stack">
+          <label>GPX-Dateien (z. B. vom Radcomputer, Garmin Connect, Strava)
+            <input type="file" name="files" accept=".gpx,application/gpx+xml" multiple required>
+          </label>
+          <label>Sportart
+            <select name="sport"><option value="auto">aus der Datei erkennen</option><option value="bike">Rad</option><option value="run">Laufen</option></select>
+          </label>
+          <button type="submit" class="primary">Importieren</button>
+          <div id="gpx-result" class="import-result"></div>
+        </form>
+        <form id="manual-form" class="stack" hidden>
+          <label>Name (optional) <input name="name" maxlength="100" placeholder="z. B. Runde um den Attersee"></label>
+          <label>Sportart <select name="type"><option value="bike">Rad</option><option value="run">Laufen</option></select></label>
+          <div class="row2">
+            <label>Datum <input type="date" name="date" required></label>
+            <label>Startzeit <input type="time" name="time" required></label>
+          </div>
+          <div class="row3">
+            <label>km <input type="number" name="km" min="0.1" max="1000" step="0.01" required></label>
+            <label>Zeit (h:mm) <input name="dur" placeholder="1:45" pattern="\d{1,2}:[0-5]\d" required></label>
+            <label>Höhenmeter <input type="number" name="elev" min="0" max="20000" step="1" value="0"></label>
+          </div>
+          <button type="submit" class="primary">Tour speichern</button>
+          <p id="manual-msg"></p>
+        </form>
+      </div>
       <div id="tour-list"></div>
     </div>
     <div class="right">
