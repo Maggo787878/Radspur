@@ -4,8 +4,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -146,9 +149,7 @@ func cli(cfg config, args []string) int {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(webFS, "web")
-	page := func(name string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) { http.ServeFileFS(w, r, static, name) }
-	}
+	page := htmlPages(static)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 
@@ -192,6 +193,38 @@ func (s *server) routes() http.Handler {
 	mux.Handle("GET /static/", noDirListing(http.StripPrefix("/static/", http.FileServerFS(static))))
 	mux.Handle("GET /{$}", s.webPage(page("index.html")))
 	return securityHeaders(mux)
+}
+
+// assetRef findet Verweise auf eigene Skripte/Stylesheets in den HTML-Seiten.
+var assetRef = regexp.MustCompile(`(/static/[^"?]+\.(?:js|css))"`)
+
+// htmlPages liefert die HTML-Seiten mit Versionskennung an allen eigenen
+// Skripten/Stylesheets (?v=<Hash über alle Web-Dateien>). So lädt der Browser
+// nach einem Update die neuen Dateien, auch wenn ein Proxy (z. B. „Cache
+// Assets“ im Nginx Proxy Manager) sie stundenlang zwischenspeichern lässt.
+func htmlPages(static fs.FS) func(name string) http.HandlerFunc {
+	h := sha256.New()
+	_ = fs.WalkDir(static, ".", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			b, _ := fs.ReadFile(static, path)
+			h.Write([]byte(path))
+			h.Write(b)
+		}
+		return nil
+	})
+	version := hex.EncodeToString(h.Sum(nil))[:12]
+	return func(name string) http.HandlerFunc {
+		raw, err := fs.ReadFile(static, name)
+		if err != nil {
+			panic(err)
+		}
+		body := assetRef.ReplaceAll(raw, []byte(`$1?v=`+version+`"`))
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Write(body)
+		}
+	}
 }
 
 // Content-Security-Policy: nur eigene Skripte/Styles; Kartenkacheln von OSM.

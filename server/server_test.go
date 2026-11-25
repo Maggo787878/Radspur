@@ -493,3 +493,29 @@ func TestLoginLockoutPerAccount(t *testing.T) {
 }
 
 func mustURL(s string) *url.URL { u, _ := url.Parse(s); return u }
+
+// HTML-Seiten verweisen auf versionierte Skripte/Stylesheets (gegen Proxy-Caches).
+func TestAssetVersioning(t *testing.T) {
+	_, ts := newTestServer(t)
+	admin := newBrowser(t, ts)
+	admin.login("admin", adminPW)
+	for _, path := range []string{"/", "/login", "/einladung/abc"} {
+		code, body := admin.do("GET", path, nil)
+		if code != 200 {
+			t.Fatalf("%s: %d", path, code)
+		}
+		for _, asset := range []string{"/static/style.css?v=", ".js?v="} {
+			if !strings.Contains(body, asset) {
+				t.Errorf("%s: %q fehlt", path, asset)
+			}
+		}
+		if strings.Contains(body, `.js"`) || strings.Contains(body, `.css"`) {
+			t.Errorf("%s: unversionierter Verweis vorhanden", path)
+		}
+	}
+	// Versionierte Datei wird ausgeliefert
+	res, err := http.Get(ts.URL + "/static/app.js?v=123")
+	if err != nil || res.StatusCode != 200 {
+		t.Fatalf("versioniertes Skript: %v %d", err, res.StatusCode)
+	}
+}
