@@ -1,287 +1,280 @@
 # Radspur
 
-**Radspur by mwonline.at** – selbst gehostetes Tour-Tracking für Rad und Laufen plus „Handy finden“.
-Android-App und ein kleiner Server als Docker-Container, ohne Cloud-Dienste Dritter.
-Mehrere Benutzer, Registrierung nur per Einladung durch den Administrator.
+**Radspur by mwonline.at** – selbst gehostetes Tour-Tracking für Rad und Laufen, Routenplanung mit
+GPX-Export für den Radcomputer und „Handy finden“. Android-App plus Server als Docker-Container, ohne
+Cloud-Dienste Dritter. Mehrere Benutzer, Registrierung nur per Einladung.
 
-**App herunterladen:** [neueste Version unter Releases](https://github.com/Maggo787878/Radspur/releases/latest)
+- **App installieren:** [Anleitung](docs/app-installation.md) ·
+  [neueste Version](https://github.com/Maggo787878/Radspur/releases/latest)
+- **Kartendaten für die Routenplanung:** [hinzufügen und aktualisieren](docs/karten.md)
 
-```
-android/   Android-App (Kotlin, Jetpack Compose, OpenStreetMap)
-server/    Server (Go, SQLite, Weboberfläche mit Leaflet)
-brouter/   Container für die Routenberechnung (BRouter)
-deploy/    docker-compose.yml, .env.example, nginx-Vorlage
-.github/   CI: baut das Server-Image (GHCR) und die signierte APK
-```
+## Inhalt
+
+- [Funktionen](#funktionen)
+- [Aufbau](#aufbau)
+- [Server einrichten](#server-einrichten)
+- [Einstellungen](#einstellungen)
+- [nginx davor](#nginx-davor)
+- [Updates](#updates)
+- [Benutzer verwalten](#benutzer-verwalten)
+- [Backup und Wiederherstellung](#backup-und-wiederherstellung)
+- [App-Releases](#app-releases)
+- [Grenzen](#grenzen)
+- [Entwicklung](#entwicklung)
+- [API](#api)
+- [Lizenzen](#lizenzen)
 
 ## Funktionen
 
-### App
+### Android-App
 
-**Aufzeichnen**
-- Sportart **Rad** oder **Laufen** vor dem Start wählen
-- Live-Karte (OpenStreetMap), GPS alle 1–2 s über einen Foreground-Service
-- Rad: aktuelle Geschwindigkeit in km/h · Laufen: aktuelles Tempo in min/km
-- Distanz, Zeit in Bewegung, Ø- und Höchstwert, Höhenmeter, GPS-Genauigkeit
-- Pause/Weiter; die Aufzeichnung übersteht einen Neustart der App
-
-**Touren**
-- Liste mit Filter *Alle / Rad / Laufen*
-- Detailansicht mit Karte und allen Werten, GPX teilen (`cycling` bzw. `running`)
-- Fertige Touren werden automatisch zum Server hochgeladen
-
-**Statistik**
-- Kilometer, Anzahl und Zeit für *diese Woche*, *diesen Monat*, *dieses Jahr* und *gesamt*
-- Balkendiagramm der letzten 12 Wochen (Kalenderwochen, Mo–So) bzw. 12 Monate
-- Durchschnitt pro Woche und pro Tour, Rekorde (längste, schnellste, meiste Höhenmeter)
-- Alles nach Sportart filterbar
-- **Excel-Export** (`.xlsx`) mit den Blättern Übersicht, Wochen, Monate, Jahre und Touren –
-  echte Datums-, Dauer- und Zahlenformate, km getrennt nach Rad und Laufen
-
-**Handy finden**
-- Meldet alle 15 min Position und Akkustand an den Server und führt Befehle aus
+- **Aufzeichnen** für **Rad** oder **Laufen** mit Live-Karte (OpenStreetMap), auch bei gesperrtem
+  Bildschirm; Rad zeigt km/h, Laufen das Tempo in min/km
+- Distanz, Zeit in Bewegung, Ø- und Höchstwert, Höhenmeter, GPS-Genauigkeit; Pause/Weiter
+- **Touren**: Liste mit Filter, Detail mit Karte, GPX teilen; automatischer Upload zum Server
+- **Statistik**: Woche, Monat, Jahr, gesamt, Diagramm 12 Wochen/Monate, Durchschnitte, Rekorde,
+  **Excel-Export**
+- **Handy finden**: meldet alle 15 Minuten Position und Akkustand und führt Befehle aus der Weboberfläche aus
+- Anmeldung mit Benutzername und Passwort; pro Handy ein eigenes Token
 
 ### Weboberfläche
 
-- Letzte Position, Genauigkeit, Akku, Verlauf (6 h / 24 h / 7 Tage) auf der Karte
-- **Klingeln lassen**: volle Lautstärke über den Alarm-Kanal, auch im Lautlos-Modus, 2 min oder bis Stopp
-- **Position anfordern**: frischer GPS-Fix mit hoher Genauigkeit
-- Nach einem Befehl meldet sich das Handy 15 min lang jede Minute („Suchmodus“)
-- Touren mit Sportart ansehen, GPX herunterladen, umbenennen, Sportart ändern, löschen
-- **Touren nachtragen**: GPX-Dateien hochladen (mehrere auf einmal, z. B. vom Radcomputer, aus Garmin
-  Connect oder Strava – Distanz, Zeit in Bewegung, Höhenmeter und Höchstgeschwindigkeit werden aus dem
-  Track berechnet, doppelte Uploads erkannt) oder ohne Aufzeichnung von Hand eintragen (Datum, km, Zeit,
-  Höhenmeter). Nachgetragene Touren zählen in der Statistik der Weboberfläche; die Statistik in der
-  App rechnet weiterhin mit den Touren auf dem Handy.
-- **Routen planen**: Orte suchen oder auf die Karte klicken, Punkte verschieben, Zwischenpunkte auf
-  der Linie einfügen; Profile Trekking, Rennrad, Gravel, MTB, „Sicher“ und zu Fuß; Distanz, Anstieg,
-  Abstieg, geschätzte Zeit und Höhenprofil; Routen speichern und als **GPX für den Radcomputer**
-  herunterladen (Garmin, Wahoo, Sigma, Hammerhead …)
-- **Statistik**: Woche, Monat, Jahr, gesamt; Diagramm der letzten 12 Wochen/Monate (Details beim
-  Überfahren), Durchschnitte, Rekorde, Filter nach Sportart, **Excel-Download** – berechnet aus den
-  hochgeladenen Touren, in der Zeitzone des Browsers
-- Positionsverlauf wird nach `LOCATION_RETENTION_DAYS` gelöscht (Touren bleiben)
-- **Konto**: Passwort ändern, angemeldete Handys ansehen und entfernen
+| Reiter | Inhalt |
+|---|---|
+| **Handy** | letzte Position, Genauigkeit, Akku, Verlauf (6 h / 24 h / 7 Tage); **Klingeln lassen** (volle Lautstärke über den Alarmkanal, auch im Lautlos-Modus) und **Position anfordern**; danach meldet sich das Handy 15 Minuten lang jede Minute |
+| **Touren** | Touren mit Karte, GPX-Download, umbenennen, Sportart ändern, löschen; **Touren nachtragen** per GPX-Upload (z. B. vom Radcomputer, mehrere Dateien auf einmal, Doppelte werden erkannt) oder von Hand |
+| **Routen** | **Routenplanung**: Orte suchen oder auf die Karte klicken, Punkte ziehen und einfügen; Profile Trekking, Rennrad, Gravel, MTB, „Sicher“, zu Fuß; Distanz, Anstieg, Abstieg, Zeit, Höhenprofil; speichern und als **GPX für den Radcomputer** herunterladen |
+| **Statistik** | wie in der App, aus allen Touren am Server (inkl. nachgetragener), mit Diagramm und **Excel-Download** |
+| **Konto** | Passwort ändern, angemeldete Handys ansehen und entfernen |
+| **Benutzer** | nur Admin: einladen, sperren, Passwort-Link, löschen |
 
-### Benutzer
-
-- Jeder Benutzer sieht und steuert nur **sein eigenes Handy und seine eigenen Touren**.
-- Registrierung **nur per Einladung**: Der Admin erstellt im Reiter *Benutzer* einen Link
-  (7 Tage gültig, einmal verwendbar) und schickt ihn selbst per Mail oder Messenger. Die eingeladene
-  Person wählt Benutzername und Passwort.
-- Der Admin verwaltet Konten – **sperren** (wirkt sofort für Browser und Handy), **Passwort-Link**
-  erzeugen, **löschen** (mit allen Daten) – sieht aber bewusst **keine** Positionen oder Touren anderer.
-- In der App meldet man sich mit Benutzername und Passwort an; der Server vergibt pro Handy ein
-  eigenes Token. Das Passwort wird am Handy nicht gespeichert.
+Jeder Benutzer sieht ausschließlich seine eigenen Daten. Auch der Admin sieht keine Positionen, Touren
+oder Routen anderer.
 
 ### Sicherheit
 
-- Passwörter mit bcrypt; Sitzungen, Geräte-Tokens und Einladungslinks werden nur als SHA-256-Hash gespeichert
+- Passwörter mit bcrypt; Sitzungen, Geräte-Tokens und Einladungslinks nur als SHA-256-Hash gespeichert
 - Sitzungen serverseitig: Abmelden, Sperren und Passwortänderung wirken sofort
-- Session-Cookie `HttpOnly`, `SameSite`, `Secure` bei HTTPS
-- **Schutz gegen Passwort-Raten**: Sperre nach 5 Fehlversuchen für 15 min – pro IP **und** pro
-  Benutzername –, zusätzlich global höchstens ~1 Fehlversuch pro Sekunde
-- Strikte Datentrennung zwischen Benutzern, abgesichert durch automatische Tests
-- Content-Security-Policy, HSTS (bei HTTPS), `X-Frame-Options`, `nosniff`, Permissions-Policy
-- Alle Skripte vom eigenen Server (Leaflet eingebettet), keine fremden CDNs
-- CSRF-Schutz für alle ändernden Web-Anfragen
-- Container läuft ohne Root-Rechte
+- Sperre nach 5 Fehlversuchen für 15 Minuten – pro IP **und** pro Benutzername –, global höchstens etwa
+  ein Fehlversuch pro Sekunde
+- Content-Security-Policy, HSTS (bei HTTPS), CSRF-Schutz, keine fremden Skripte (Leaflet eingebettet)
+- Container ohne Root-Rechte; BRouter nur intern erreichbar
+- Strikte Datentrennung zwischen Benutzern, durch automatische Tests abgesichert
 
-## Server betreiben
+## Aufbau
 
-Der Container spricht HTTP auf Port 8080 und ist für den Betrieb hinter **nginx** gedacht.
-
-```bash
-git clone https://github.com/Maggo787878/Radspur.git && cd Radspur/deploy
+```
+Android-App ──HTTPS──┐
+                     ▼
+Browser ──HTTPS──► nginx ──HTTP──► radspur (Go, SQLite) ──► brouter (Routenberechnung, intern)
+                                        └──► nominatim.openstreetmap.org (Ortssuche)
 ```
 
-```bash
-cp .env.example .env && nano .env
+```
+android/   Android-App (Kotlin, Jetpack Compose, osmdroid)
+server/    Server (Go, SQLite, Weboberfläche mit Leaflet)
+brouter/   Container für die Routenberechnung (BRouter)
+deploy/    docker-compose.yml, .env.example, nginx-Vorlage
+docs/      Anleitungen (App-Installation, Kartendaten)
+.github/   CI: Server-Image, BRouter-Image, signierte APK
 ```
 
-In `.env` mindestens `ADMIN_PASSWORD` und `PUBLIC_URL` setzen, dann:
+Die Images werden bei jedem Push von GitHub Actions gebaut und liegen öffentlich unter
+`ghcr.io/maggo787878/radspur-server` und `ghcr.io/maggo787878/radspur-brouter` (amd64 und arm64).
 
-```bash
-docker compose pull && docker compose up -d
-```
+## Server einrichten
 
-**Update:** im Ordner `deploy`
+Voraussetzungen: Docker mit Compose-Plugin, ein Reverse Proxy mit TLS (z. B. nginx oder Nginx Proxy
+Manager), etwa **1,5 GB RAM** und **1 GB Speicher** für die Kartendaten (Österreich).
 
-```bash
-git pull && docker compose pull && docker compose up -d
-```
+1. Repository holen:
 
-### Einstellungen (`.env`)
+   ```bash
+   git clone https://github.com/Maggo787878/Radspur.git && cd Radspur/deploy
+   ```
+
+2. Einstellungen anlegen und anpassen – mindestens `ADMIN_PASSWORD` und `PUBLIC_URL`:
+
+   ```bash
+   cp .env.example .env && nano .env
+   ```
+
+3. Starten:
+
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
+
+4. Beim ersten Start lädt BRouter die Kartendaten (rund 600 MB, einige Minuten):
+
+   ```bash
+   docker logs -f radspur-brouter
+   ```
+
+5. Reverse Proxy einrichten ([nginx davor](#nginx-davor)), dann im Browser mit Benutzername `admin` (bzw.
+   `ADMIN_USER`) und `ADMIN_PASSWORD` anmelden.
+
+`ADMIN_USER` und `ADMIN_PASSWORD` werden **nur beim ersten Start** verwendet, um das Admin-Konto
+anzulegen. Danach das Passwort in der Weboberfläche unter **Konto** ändern.
+
+## Einstellungen
+
+In `deploy/.env`; nach Änderungen `docker compose up -d`.
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `ADMIN_USER` | `admin` | Name des Admin-Kontos – nur beim **ersten Start** verwendet |
-| `ADMIN_PASSWORD` | – | Passwort des Admin-Kontos (mind. 8 Zeichen) – nur beim **ersten Start** verwendet, danach in der Weboberfläche ändern |
-| `PUBLIC_URL` | aus der Anfrage | öffentliche Adresse, Basis für Einladungslinks (z. B. `https://radspur.example.at`) |
-| `DEVICE_TOKEN` | leer | optional: gemeinsames Geräte-Token aus Versionen vor der Benutzerverwaltung, gehört dem Admin |
-| `LOCATION_RETENTION_DAYS` | `30` | Aufbewahrung des Positionsverlaufs |
-| `RADSPUR_BIND` | `127.0.0.1` | Adresse, auf der Port 8080 veröffentlicht wird (`0.0.0.0` = aus dem Netz erreichbar) |
+| `ADMIN_USER` | `admin` | Name des Admin-Kontos – nur beim ersten Start |
+| `ADMIN_PASSWORD` | – | Passwort des Admin-Kontos (mind. 8 Zeichen) – nur beim ersten Start |
+| `PUBLIC_URL` | aus der Anfrage | öffentliche Adresse, Basis für Einladungslinks, z. B. `https://radspur.example.at` |
+| `LOCATION_RETENTION_DAYS` | `30` | Aufbewahrung des Positionsverlaufs; Touren und Routen bleiben immer |
+| `RADSPUR_BIND` | `127.0.0.1` | Adresse für Port 8080: `127.0.0.1` = nur dieser Host, `0.0.0.0` = auch aus dem Netz |
 | `RADSPUR_PORT` | `8080` | veröffentlichter Port |
-| `PROXY_NETWORK` | `npm_default` | Docker-Netz des Proxys (nur mit `docker-compose.npm.yml`) |
-| `SECURE_COOKIE` | `auto` | `auto` = Secure-Flag nur bei HTTPS, `true` = immer, `false` = nie |
-| `BROUTER_SEGMENTS` | `E5_N45 E10_N45 E15_N45` | Kartenkacheln für die Routenplanung (je 5 × 5 Grad), Standard Österreich mit Grenzgebieten – siehe unten |
+| `SECURE_COOKIE` | `auto` | Secure-Flag am Login-Cookie: `auto` = bei HTTPS (über `X-Forwarded-Proto`), `true`, `false` |
+| `BROUTER_SEGMENTS` | `E5_N45 E10_N45 E15_N45` | Kartenkacheln für die Routenplanung – [docs/karten.md](docs/karten.md) |
 | `BROUTER_MEMORY` | `1g` | Arbeitsspeicher für BRouter |
-| `RADSPUR_IMAGE` | `ghcr.io/maggo787878/radspur-server:latest` | Container-Image |
+| `BROUTER_REFRESH_DAYS` | `30` | Kartendaten beim Start neu laden, wenn älter |
+| `PROXY_NETWORK` | `npm_default` | Docker-Netz des Proxys, nur mit `docker-compose.npm.yml` |
+| `DEVICE_TOKEN` | leer | optional: gemeinsames Token aus Versionen vor der Benutzerverwaltung, gehört dem Admin |
+| `RADSPUR_IMAGE`, `BROUTER_IMAGE` | `ghcr.io/maggo787878/…:latest` | Container-Images |
+| `GEOCODER_URL` | `https://nominatim.openstreetmap.org` | Ortssuche; eigener Nominatim/Photon möglich |
 
-### nginx davor
+## nginx davor
+
+Der Container spricht HTTP auf Port 8080; TLS übernimmt der Reverse Proxy.
 
 | nginx läuft … | `.env` | Ziel im Proxy |
 |---|---|---|
 | auf demselben Host | `RADSPUR_BIND=127.0.0.1` | `http://127.0.0.1:8080` |
-| auf einem anderen Rechner | `RADSPUR_BIND=0.0.0.0` | `http://<docker-host>:8080` |
+| auf einem anderen Rechner | `RADSPUR_BIND=0.0.0.0` (Port 8080 in der Firewall von außen sperren) | `http://<docker-host>:8080` |
 | als Container (z. B. Nginx Proxy Manager) | `PROXY_NETWORK=<netz>`, Start mit `docker compose -f docker-compose.yml -f docker-compose.npm.yml up -d` | `http://radspur:8080` |
 
-Eine fertige Vorlage liegt in `deploy/nginx/radspur.conf`. Wichtig sind darin:
+Vorlage: [`deploy/nginx/radspur.conf`](deploy/nginx/radspur.conf). Wichtig sind:
 
-- `client_max_body_size 32m;` – sonst lehnt nginx Tour-Uploads über 1 MB mit `413` ab
-- `X-Forwarded-Proto $scheme` – damit der Server HTTPS erkennt (Secure-Cookie, HSTS)
-- `X-Real-IP $remote_addr` – echte Client-IP für Login-Sperre und Log
+- `client_max_body_size 32m;` – sonst scheitern Tour-Uploads und GPX-Importe über 1 MB mit `413`
+- `proxy_set_header X-Forwarded-Proto $scheme;` – damit der Server HTTPS erkennt (Secure-Cookie, HSTS)
+- `proxy_set_header X-Real-IP $remote_addr;` – echte Client-IP für Login-Sperre und Log
 - **keinen** eigenen `Referrer-Policy`-Header setzen (z. B. `no-referrer`), sonst blockieren die
   OpenStreetMap-Kachelserver die Karte mit „403 Access blocked“
 
 **Nginx Proxy Manager:** *Force SSL* aktivieren und unter *Advanced* `client_max_body_size 32m;` eintragen.
 
-Über das Internet sollte die Seite nur per **HTTPS** erreichbar sein (Let's Encrypt im Proxy).
-Reines HTTP funktioniert, Passwort, Token und Positionen gehen dann aber im Klartext übers Netz –
-das ist nur im LAN oder über VPN vertretbar. Ist `RADSPUR_BIND=0.0.0.0` gesetzt, Port 8080 in der
-Firewall von außen sperren.
+Über das Internet nur per **HTTPS** betreiben – Passwörter, Tokens und Positionen gehen sonst im
+Klartext übers Netz.
 
-### Umstieg von der Einzelbenutzer-Version
+## Updates
 
-Beim ersten Start der neuen Version legt der Server das Admin-Konto aus `ADMIN_USER` (Standard
-`admin`) und dem bisherigen `ADMIN_PASSWORD` an und ordnet ihm **alle vorhandenen Touren und
-Positionen** zu. Ein Handy mit dem alten `DEVICE_TOKEN` funktioniert weiter. Danach:
-
-1. Im Browser mit Benutzername `admin` und dem bisherigen Passwort anmelden.
-2. In der App unter *Einstellungen* abmelden und mit Benutzername und Passwort neu anmelden.
-3. Wenn alle Handys umgestellt sind, `DEVICE_TOKEN` in `.env` leeren und den Container neu starten.
-
-### Admin-Passwort vergessen
-
-Ein Link zum Setzen eines neuen Passworts (7 Tage gültig) lässt sich direkt am Server erzeugen –
-das entsperrt das Konto auch:
+Im Ordner `deploy`:
 
 ```bash
-docker exec radspur radspur-server reset-link admin
+git pull && docker compose pull && docker compose up -d
 ```
 
-### Routenplanung (BRouter)
+Datenbankänderungen neuer Versionen werden beim Start automatisch übernommen. Skripte und Stylesheets
+tragen eine Versionskennung, der Browser lädt nach einem Update also automatisch die neuen Dateien.
 
-Die Routen berechnet ein eigener Container mit [BRouter](https://github.com/abrensch/brouter), der nur
-intern für den Radspur-Server erreichbar ist. Beim ersten Start lädt er die Kartendaten (OpenStreetMap,
-~150–250 MB je Kachel) von brouter.de ins Volume `brouter-segments` und frischt sie alle 30 Tage auf –
-der erste Start dauert daher einige Minuten (`docker logs -f radspur-brouter`).
-
-Andere Regionen: Kacheln in `BROUTER_SEGMENTS` ergänzen (Namen = linke untere Ecke, z. B. `E10_N50`
-für 10–15° Ost / 50–55° Nord; Übersicht unter https://brouter.de/brouter/segments4/), dann
-`docker compose up -d`. Liegt ein Punkt außerhalb, meldet die Planung das.
-
-Die Ortssuche nutzt den öffentlichen Dienst Nominatim von OpenStreetMap (höchstens eine Anfrage pro
-Sekunde, Ergebnisse werden zwischengespeichert). Ein eigener Nominatim-/Photon-Server lässt sich mit
-`GEOCODER_URL` eintragen.
-
-**GPX auf den Radcomputer:** Die Datei ist ein GPX-1.1-Track mit Höhen. Garmin: per USB nach
-`Garmin/NewFiles` kopieren oder über Garmin Connect *Strecken → Importieren*. Wahoo, Hammerhead, Sigma
-u. a.: Import über die jeweilige App. Sehr lange Routen werden auf höchstens 9000 Punkte vereinfacht
-(Abweichung ≤ 2 m), weil ältere Geräte längere Strecken abschneiden.
-
-### Daten und Backup
-
-Die Daten liegen im Docker-Volume `deploy_radspur-data` (SQLite). Backup:
+**Ohne Git** (Dateien damals einzeln kopiert): die aktuelle `docker-compose.yml` im bisherigen Ordner
+ersetzen – **nicht** in einen neuen Ordner wechseln, weil Docker die Daten-Volumes nach dem Ordnernamen
+benennt:
 
 ```bash
-docker run --rm -v deploy_radspur-data:/data -v "$PWD":/backup alpine tar czf /backup/radspur-data.tgz -C /data .
+cp docker-compose.yml docker-compose.yml.bak && curl -fsSLO https://raw.githubusercontent.com/Maggo787878/Radspur/main/deploy/docker-compose.yml
 ```
 
-Datenbank-Änderungen neuer Versionen werden beim Start automatisch nachgezogen.
+```bash
+docker compose pull && docker compose up -d
+```
 
-### Image aus GHCR
+Kartendaten aktualisieren: [docs/karten.md](docs/karten.md#kartendaten-aktualisieren).
 
-Jeder Push auf `main` mit Änderungen in `server/` baut `ghcr.io/maggo787878/radspur-server:latest`
-für amd64 und arm64. Das Paket ist öffentlich, `docker compose pull` braucht keinen Login.
+## Benutzer verwalten
 
-## App installieren
+- **Einladen:** Weboberfläche → **Benutzer** → *Einladungslink erstellen*. Den Link (7 Tage gültig,
+  einmal verwendbar) selbst per Mail oder Messenger schicken, dazu die
+  [App-Anleitung](docs/app-installation.md).
+- **Sperren** wirkt sofort für Browser und Handys; **Passwort-Link** erzeugt einen Link zum Setzen eines
+  neuen Passworts; **Löschen** entfernt das Konto mit allen Daten.
+- **Admin-Passwort vergessen:** Link direkt am Server erzeugen (entsperrt das Konto auch):
 
-1. Auf dem Handy die [neueste Release-Seite](https://github.com/Maggo787878/Radspur/releases/latest)
-   öffnen und `radspur.apk` herunterladen.
-2. Datei antippen und installieren. Beim ersten Mal „Unbekannte Apps installieren“ für den Browser
-   bzw. Dateimanager erlauben; eine Warnung von Play Protect mit *Trotzdem installieren* bestätigen.
-3. Updates genauso: neue APK über die vorhandene App installieren – Touren und Einstellungen bleiben erhalten.
+  ```bash
+  docker exec radspur radspur-server reset-link admin
+  ```
 
-### Einrichtung
+**Datenschutz:** Du speicherst Standortdaten anderer Personen. Sag den Eingeladenen, dass Positionen
+`LOCATION_RETENTION_DAYS` Tage und Touren unbegrenzt gespeichert werden und dass der Admin sie nicht sieht.
 
-1. **Einstellungen**: Server-URL (`https://…`), Benutzername und Passwort eintragen → *Anmelden*.
-   Kurz darauf erscheint „Letzte Meldung an Server“ und die Position in der Weboberfläche.
-   Ein Konto gibt es nur per Einladung vom Administrator.
-2. Berechtigungen erteilen: Standort, Benachrichtigungen, **Standort im Hintergrund („Immer zulassen“)**
-   und **Akku-Optimierung deaktivieren** – sonst funktioniert „Handy finden“ nicht zuverlässig.
-3. Samsung, Xiaomi, Huawei & Co.: Radspur zusätzlich in der Energiespar-/Autostart-Verwaltung des
-   Herstellers auf „nicht einschränken“ stellen.
+## Backup und Wiederherstellung
 
-## Neue Version veröffentlichen
+Alle Daten (Benutzer, Touren, Routen, Positionen) liegen in **einer SQLite-Datei** im Volume
+`<ordner>_radspur-data` (Name prüfen mit `docker volume ls | grep radspur-data`). Die Kartendaten im
+Volume `…_brouter-segments` muss man nicht sichern – sie werden neu geladen.
 
-1. Änderungen nach `main` pushen – GitHub Actions baut Server-Image und APK und prüft die Signatur.
-2. [Neues Release anlegen](https://github.com/Maggo787878/Radspur/releases/new): *Choose a tag* →
-   neuen Tag eintippen (z. B. `v0.3.0`) → *Create new tag on publish* → **Publish release**.
-3. Nach 3–4 Minuten hängt `radspur.apk` am Release. Der Versionsname der App kommt aus dem Tag
-   (`v0.3.0` → `0.3.0`), die interne Versionsnummer ist die Laufnummer des Builds.
+**Sichern** (Radspur kurz anhalten, damit die Datenbank konsistent ist):
 
-### Signatur
+```bash
+docker compose stop radspur && docker run --rm -v deploy_radspur-data:/data -v "$PWD":/backup alpine tar czf /backup/radspur-$(date +%F).tgz -C /data . ; docker compose start radspur
+```
+
+**Wiederherstellen** – Container entfernen, Volume neu anlegen und das Backup hineinentpacken
+(die aktuelle Datenbank wird dabei ersetzt):
+
+```bash
+docker compose stop radspur && docker compose rm -f radspur && docker volume rm deploy_radspur-data
+```
+
+```bash
+docker run --rm -v deploy_radspur-data:/data -v "$PWD":/backup alpine sh -c 'tar xzf /backup/radspur-JJJJ-MM-TT.tgz -C /data && chown -R 10001:10001 /data'
+```
+
+```bash
+docker compose up -d radspur
+```
+
+`deploy_radspur-data` jeweils durch den Namen deines Volumes ersetzen.
+
+## App-Releases
+
+GitHub Actions baut bei jedem Push in `android/` eine APK. Ein Release mit Download-Link entsteht über
+einen Versions-Tag – Ablauf in [docs/app-installation.md](docs/app-installation.md#neue-app-version-veröffentlichen).
 
 Alle APKs müssen mit **demselben Schlüssel** signiert sein, sonst lassen sie sich nicht über die
-installierte App installieren. Der Schlüssel liegt als Repository-Secret in GitHub
-(*Settings → Secrets and variables → Actions*):
+installierte App installieren. Der Schlüssel liegt als Repository-Secret in GitHub:
 
 | Secret | Inhalt |
 |---|---|
-| `RADSPUR_KEYSTORE_BASE64` | Keystore-Datei `radspur.jks` als Base64 (eine Zeile) |
+| `RADSPUR_KEYSTORE_BASE64` | Keystore `radspur.jks` als Base64 (eine Zeile) |
 | `RADSPUR_KEYSTORE_PASSWORD` | Keystore-Passwort |
 | `RADSPUR_KEY_ALIAS` | `radspur` |
 | `RADSPUR_KEY_PASSWORD` | Schlüssel-Passwort |
 
-Der Workflow prüft nach jedem Build den SHA-256-Fingerabdruck des Zertifikats
-(`427be761…790905e32`) und bricht ab, wenn er nicht passt. Ohne Secrets wird kein Release veröffentlicht.
-
-**Keystore und Passwort unbedingt außerhalb von GitHub sichern** (z. B. Passwortmanager) –
-Secrets lassen sich nicht mehr auslesen, und ohne Schlüssel sind keine Updates mehr möglich.
+Der Workflow prüft nach jedem Build den SHA-256-Fingerabdruck des Zertifikats (`427be761…790905e32`) und
+veröffentlicht kein Release, wenn er nicht passt. **Keystore und Passwort außerhalb von GitHub sichern** –
+Secrets lassen sich nicht mehr auslesen.
 
 ## Grenzen
 
-- Android führt Hintergrundjobs frühestens alle 15 min aus, im Stromsparmodus auch seltener. Ein Befehl
-  aus dem Web („Klingeln“, „Position“) wirkt daher erst beim nächsten Check-in. Danach reagiert das
-  Handy 15 min lang minütlich. Mögliche Ausbaustufe: Push über einen selbst gehosteten **ntfy**-Server.
-- Pro Benutzer wird ein Handy geortet – bei mehreren angemeldeten Handys zeigt die Weboberfläche die
-  zuletzt gemeldete Position und Befehle gehen an das Handy, das sich als nächstes meldet.
-- Die Statistik in der App rechnet mit den Touren auf dem Handy; auf ein neues Handy werden Touren
-  (noch) nicht vom Server zurückgeholt.
-- Ausgeschaltetes Handy oder Handy ohne Netz kann nicht gefunden werden – die zuletzt gemeldete
-  Position bleibt sichtbar.
-
-## API
-
-| Methode | Pfad | Auth | Zweck |
-|---|---|---|---|
-| POST | `/api/device/login` | – | Anmeldung `{username, password, device}` → `{token}` (Geräte-Token) |
-| POST | `/api/device/locations` | Bearer Geräte-Token | Positionen melden; Antwort enthält offene Befehle |
-| POST | `/api/device/commands/{id}/ack` | Bearer | Befehl bestätigen |
-| POST | `/api/device/tours` | Bearer | Tour hochladen (Upsert per `clientId`, `type`: `bike` \| `run`) |
-| GET | `/healthz` | – | Healthcheck |
-
-Die Web-API (`/api/web/*`) verlangt ein Session-Cookie nach Login und den Header `X-Radspur: 1`
-für ändernde Anfragen; `/api/web/admin/*` zusätzlich die Rolle Admin. Einladungen:
-`GET/POST /api/invite/{token}`, Seite `/einladung/{token}`.
+- Android führt Hintergrundjobs höchstens alle 15 Minuten aus, im Stromsparmodus seltener. „Klingeln“ und
+  „Position anfordern“ wirken daher erst beim nächsten Check-in.
+- Pro Benutzer wird ein Handy geortet; bei mehreren Handys zeigt die Weboberfläche die zuletzt gemeldete
+  Position, und Befehle gehen an das Handy, das sich als nächstes meldet.
+- Die Statistik in der **App** rechnet mit den Touren auf dem Handy; nachgetragene Touren erscheinen nur in
+  der Statistik der Weboberfläche.
+- Die App lädt Kartenkacheln online; ohne Mobilnetz bleibt die Karte unterwegs grau (die Aufzeichnung
+  läuft weiter).
+- Keine iOS-App; am iPhone funktioniert die Weboberfläche.
 
 ## Entwicklung
 
-Server lokal starten:
+Server lokal (ohne Routenberechnung, bzw. mit `BROUTER_URL` auf einen laufenden BRouter):
 
 ```bash
-cd server && ADMIN_PASSWORD=testtest DB_PATH=./dev.db go run .
+cd server && ADMIN_PASSWORD=testtest DB_PATH=./dev.db SECURE_COOKIE=false go run .
+```
+
+Server-Tests – u. a. Datentrennung, Einladungen, Login-Sperre, Statistik, Routen, GPX-Import, Übernahme
+alter Datenbanken:
+
+```bash
+cd server && go test ./...
 ```
 
 App bauen:
@@ -290,16 +283,9 @@ App bauen:
 cd android && ./gradlew assembleDebug
 ```
 
-Server-Tests (u. a. Datentrennung zwischen Benutzern, Einladungen, Sperren, Login-Sperre, Übernahme
-einer alten Datenbank):
-
-```bash
-cd server && go test ./...
-```
-
-App: Unit-Tests (Statistik, Excel-Export) und Screenshot-Tests der Bildschirme mit
-[Paparazzi](https://github.com/cashapp/paparazzi) – ohne Gerät oder Emulator, auf einem Pixel 5 und
-einem kleinen Gerät mit 130 % Schriftgröße. Referenzbilder liegen in `android/app/src/test/snapshots/`.
+App-Tests – Statistik, Excel-Export und Screenshot-Tests der Bildschirme mit
+[Paparazzi](https://github.com/cashapp/paparazzi) (Pixel 5 und kleines Gerät mit 130 % Schrift,
+Referenzbilder in `android/app/src/test/snapshots/`):
 
 ```bash
 cd android && ./gradlew verifyPaparazziDebug
@@ -311,9 +297,26 @@ Nach gewollten Änderungen an der Oberfläche die Referenzbilder neu erzeugen:
 cd android && ./gradlew recordPaparazziDebug
 ```
 
+## API
+
+**App** (Bearer-Token aus `/api/device/login`):
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| POST | `/api/device/login` | `{username, password, device}` → `{token}` |
+| POST | `/api/device/locations` | Positionen melden; Antwort enthält offene Befehle |
+| POST | `/api/device/commands/{id}/ack` | Befehl bestätigen |
+| POST | `/api/device/tours` | Tour hochladen (Upsert per `clientId`, `type`: `bike` \| `run`) |
+
+**Weboberfläche** (Session-Cookie; ändernde Anfragen mit Header `X-Radspur: 1`): `/api/web/status`,
+`/locations`, `/commands`, `/tours` (inkl. `/tours/manual`, `/tours/import-gpx`, `PATCH /tours/{id}`),
+`/stats`, `/stats.xlsx`, `/routes`, `/route-calc`, `/route-profiles`, `/geocode`, `/me`, `/admin/*`
+(nur Admin). Einladungen: `GET/POST /api/invite/{token}`. GPX-Downloads: `/tours/{id}/gpx`,
+`/routes/{id}/gpx`. Healthcheck: `GET /healthz`.
+
 ## Lizenzen
 
-Kartendaten © [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkende ·
-[Leaflet](https://leafletjs.com) (BSD-2-Clause, `server/web/vendor/leaflet/LICENSE`) ·
-[osmdroid](https://github.com/osmdroid/osmdroid) (Apache-2.0) ·
-[BRouter](https://github.com/abrensch/brouter) (MIT) · Ortssuche [Nominatim](https://nominatim.org)
+Kartendaten © [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkende (ODbL) ·
+[Leaflet](https://leafletjs.com) (BSD-2-Clause) · [osmdroid](https://github.com/osmdroid/osmdroid)
+(Apache-2.0) · [BRouter](https://github.com/abrensch/brouter) (MIT) · Ortssuche
+[Nominatim](https://nominatim.org)

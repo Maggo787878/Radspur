@@ -27,6 +27,7 @@ services:
     environment:
       BROUTER_SEGMENTS: ${BROUTER_SEGMENTS:-E5_N45 E10_N45 E15_N45}
       BROUTER_MEMORY: ${BROUTER_MEMORY:-1g}
+      BROUTER_REFRESH_DAYS: ${BROUTER_REFRESH_DAYS:-30}
     volumes:
       - brouter-segments:/segments
 
