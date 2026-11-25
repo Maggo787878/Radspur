@@ -59,10 +59,68 @@ table.list td.actions-cell button { margin-left: 4px; padding: 4px 8px; font-siz
 .tour small { color: var(--muted); }
 .stats { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; }
 .stats b { font-size: 1.2em; }
-.login { display: grid; place-items: center; }
-.card { background: var(--card); padding: 24px; border-radius: 10px; border: 1px solid var(--line); width: min(340px, calc(100% - 32px)); display: grid; gap: 12px; }
+.card { display: grid; gap: 12px; }
 .card label { display: grid; gap: 4px; }
 .error { color: var(--danger); margin: 0; }
+
+/* ---------- Login / Einladung ---------- */
+/* Hintergrund als feste Ebene (::before), Abdunklung (::after), Karte darüber. */
+.login {
+  min-height: 100%; display: flex; align-items: center; justify-content: flex-end;
+  padding: 24px max(48px, 8vw) 24px 16px;
+  background: linear-gradient(160deg, #1b1f8a, #0b0e3a); color: #eef0ff;
+}
+.login::before {
+  content: ""; position: fixed; inset: 0; z-index: 0;
+  /* rechts ausgerichtet: Logo und Radfahrer rücken nach links, weg von der Karte */
+  background: url(/static/img/login-bg.webp) right 30% / cover no-repeat;
+}
+.login::after {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 10, 40, 0) 35%, rgba(8, 10, 40, .55) 100%);
+}
+.login .card {
+  position: relative; z-index: 1; width: min(360px, 100%); padding: 28px 24px 24px; gap: 14px; border-radius: 18px;
+  background: rgba(16, 18, 66, .55); border: 1px solid rgba(255, 255, 255, .16);
+  -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 24px 60px rgba(0, 0, 25, .45);
+}
+.login p { margin: 0; line-height: 1.45; }
+.brand-block { text-align: center; margin-bottom: 4px; }
+.brand-block img { width: 96px; height: auto; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .35)); }
+.brand-block h1 { margin: 6px 0 0; font-size: 1.7em; letter-spacing: .02em; }
+.brand-block .by { color: rgba(238, 240, 255, .7); font-size: .9em; }
+.login label { color: rgba(238, 240, 255, .88); font-size: .93em; }
+.login input {
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .2); color: #fff;
+  padding: 10px 12px; border-radius: 10px;
+}
+.login input:focus { outline: 2px solid #8f91ff; outline-offset: 1px; border-color: transparent; }
+.login button[type=submit] {
+  margin-top: 4px; padding: 11px; border: none; border-radius: 10px; color: #fff; font-weight: 600;
+  background: linear-gradient(135deg, #6063f6, #3537c4); box-shadow: 0 6px 18px rgba(40, 42, 190, .45);
+}
+.login button[type=submit]:hover { filter: brightness(1.12); }
+.login .error { color: #ffd0d0; background: rgba(198, 40, 40, .32); padding: 8px 10px; border-radius: 8px; }
+
+/* Laptop/Tablet: geteilt – Bild links, Karte rechts auf dunklem Feld */
+@media (min-width: 701px) and (max-width: 1279px) and (orientation: landscape) {
+  .login { padding: 24px 40px; }
+  .login::before { right: 440px; background-position: center 30%; }
+  .login::after { right: 440px; }
+}
+
+/* Handy: Bild oben in voller Breite, weich ins Dunkelblau auslaufend, Karte darunter */
+@media (max-width: 700px), (orientation: portrait) and (max-width: 1279px) {
+  .login { justify-content: center; align-items: flex-end; padding: 16px; background: #0b0e3a; }
+  .login::before { bottom: auto; height: 93vw; background-size: 170% auto; background-position: 45% 0; }
+  .login::after { background: linear-gradient(180deg, rgba(11, 14, 58, 0) 55vw, #0b0e3a 93vw); }
+  .login .card { margin-top: 70vw; }
+  .brand-block img { display: none; } /* Logo steht schon im Bild darüber */
+}
+
+header .logo { height: 30px; width: auto; vertical-align: middle; margin-right: 8px; }
+header .brand { display: flex; align-items: center; }
 @media (max-width: 760px) {
   header { flex-wrap: wrap; row-gap: 6px; }
   header nav { order: 3; flex-basis: 100%; overflow-x: auto; }
@@ -70,7 +128,7 @@ table.list td.actions-cell button { margin-left: 4px; padding: 4px 8px; font-siz
   #whoami { display: none; }
   table.list .hide-sm { display: none; }
   header { gap: 8px; padding: 8px 12px; }
-  header .brand { display: flex; flex-direction: column; line-height: 1.1; }
+  header .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
   header .by { font-size: .75em; }
   .tab { flex-direction: column; }
   .panel { width: 100%; border-right: none; border-bottom: 1px solid var(--line); max-height: 45%; }

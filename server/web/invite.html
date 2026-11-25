@@ -6,10 +6,18 @@
 <meta name="referrer" content="no-referrer">
 <title>Radspur – Einladung</title>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+<meta name="theme-color" content="#1e2090">
 </head>
 <body class="login">
 <form id="form" class="card" hidden>
-  <h1>Radspur</h1>
+  <div class="brand-block">
+    <img src="/static/img/logo.png" alt="" width="310" height="187">
+    <h1>Radspur</h1>
+    <div class="by">by mwonline.at</div>
+  </div>
   <p id="intro"></p>
   <label id="user-label">Benutzername
     <input name="username" autocomplete="username" autocapitalize="none" spellcheck="false"
@@ -25,7 +33,11 @@
   <button type="submit" id="submit"></button>
 </form>
 <div id="invalid" class="card" hidden>
-  <h1>Radspur</h1>
+  <div class="brand-block">
+    <img src="/static/img/logo.png" alt="" width="310" height="187">
+    <h1>Radspur</h1>
+    <div class="by">by mwonline.at</div>
+  </div>
   <p>Dieser Link ist ungültig, abgelaufen oder wurde bereits verwendet. Bitte einen neuen Link beim Administrator anfordern.</p>
 </div>
 <script src="/static/invite.js"></script>

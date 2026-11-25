@@ -5,10 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Radspur – Anmelden</title>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+<meta name="theme-color" content="#1e2090">
 </head>
 <body class="login">
 <form method="post" action="/login" class="card">
-  <h1>Radspur</h1>
+  <div class="brand-block">
+    <img src="/static/img/logo.png" alt="" width="310" height="187">
+    <h1>Radspur</h1>
+    <div class="by">by mwonline.at</div>
+  </div>
   <p id="err" class="error" hidden>Benutzername oder Passwort falsch.</p>
   <p id="err-locked" class="error" hidden>Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.</p>
   <p id="err-cookie" class="error" hidden>Anmeldung korrekt, aber der Browser hat das Anmelde-Cookie nicht gespeichert.
